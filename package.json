@@ -15,9 +15,9 @@
   "author": "XCAutokit",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/xcautokit/xcautokit.git"
+    "url": "git+https://github.com/Ezra-Black/xcautokit.git"
   },
-  "homepage": "https://github.com/xcautokit/xcautokit",
+  "homepage": "https://github.com/Ezra-Black/xcautokit",
   "engines": {
     "node": ">=18"
   },
