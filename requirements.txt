@@ -1,0 +1,3 @@
+mcp>=0.9.0
+pyobjc-framework-Quartz>=10.0
+pyobjc-framework-CoreWLAN>=10.0

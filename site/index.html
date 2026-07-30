@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>XCAutokit — Ship iOS with agents that can actually build</title>
+  <meta name="description" content="Install XCAutokit as an MCP server or CLI. Build, test, and drive the iOS Simulator the way XcodeBuildMCP popularized, with first party Xcode mcpbridge support." />
+  <meta name="robots" content="noindex" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0a0c0e;
+      --bg-2: #12161a;
+      --ink: #e8efe9;
+      --muted: #8a968c;
+      --accent: #5eead4;
+      --accent-2: #f0b429;
+      --danger: #ff6b4a;
+      --space-50: 4px;
+      --space-75: 8px;
+      --space-100: 12px;
+      --space-200: 16px;
+      --space-300: 24px;
+      --space-400: 32px;
+      --space-500: 40px;
+      --space-600: 48px;
+      --space-700: 64px;
+      --space-800: 80px;
+      --space-900: 96px;
+      --ease: cubic-bezier(0.32, 0.72, 0, 1);
+      --max: 1120px;
+      --hero-max: 680px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: Manrope, system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.5;
+      overflow-x: hidden;
+    }
+
+    a { color: inherit; text-decoration: none; }
+    button, .btn {
+      font: inherit;
+      cursor: pointer;
+      border: none;
+      appearance: none;
+    }
+
+    .skip {
+      position: absolute;
+      left: -999px;
+      top: 0;
+      background: var(--accent);
+      color: #04120f;
+      padding: var(--space-75) var(--space-100);
+      z-index: 100;
+    }
+    .skip:focus { left: var(--space-200); top: var(--space-200); }
+
+    #grid-canvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+      pointer-events: none;
+      opacity: 0.85;
+    }
+
+    #dither {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+      pointer-events: none;
+      opacity: 0.22;
+      mix-blend-mode: soft-light;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8'%3E%3Crect width='8' height='8' fill='%23000'/%3E%3Ccircle cx='1' cy='1' r='0.8' fill='%23fff'/%3E%3Ccircle cx='5' cy='3' r='0.7' fill='%23fff'/%3E%3Ccircle cx='3' cy='6' r='0.6' fill='%23fff'/%3E%3C/svg%3E");
+      background-size: 8px 8px;
+      image-rendering: pixelated;
+    }
+
+    .scan {
+      position: fixed;
+      inset: 0;
+      z-index: 2;
+      pointer-events: none;
+      background: repeating-linear-gradient(
+        to bottom,
+        transparent 0,
+        transparent 2px,
+        rgba(0,0,0,0.08) 2px,
+        rgba(0,0,0,0.08) 3px
+      );
+      opacity: 0.35;
+    }
+
+    .shell {
+      position: relative;
+      z-index: 3;
+    }
+
+    nav.island {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: flex;
+      justify-content: center;
+      padding-top: var(--space-300);
+      margin-bottom: var(--space-400);
+    }
+
+    .island-inner {
+      display: flex;
+      align-items: center;
+      gap: var(--space-300);
+      padding: var(--space-75) var(--space-200);
+      border-radius: 999px;
+      background: rgba(18, 22, 26, 0.72);
+      backdrop-filter: blur(24px);
+      border: 1px solid rgba(232, 239, 233, 0.08);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.35);
+      transition: transform 700ms var(--ease), background 700ms var(--ease);
+    }
+
+    .brand-mark {
+      font-weight: 700;
+      font-size: 14px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+
+    .island-inner a {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--muted);
+      transition: color 700ms var(--ease);
+    }
+    .island-inner a:hover,
+    .island-inner a:focus-visible { color: var(--ink); }
+
+    .wrap {
+      width: min(100% - 48px, var(--max));
+      margin-inline: auto;
+    }
+
+    .hero {
+      padding: var(--space-700) 0 var(--space-800);
+      min-height: 86vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-75);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--accent-2);
+      margin-bottom: var(--space-300);
+    }
+    .eyebrow::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      background: var(--accent-2);
+      box-shadow: 0 0 0 3px rgba(240,180,41,0.2);
+      image-rendering: pixelated;
+    }
+
+    .brand-hero {
+      font-size: clamp(48px, 12vw, 96px);
+      font-weight: 700;
+      line-height: 1;
+      letter-spacing: -0.04em;
+      margin: 0 0 var(--space-300);
+      max-width: var(--hero-max);
+      text-wrap: balance;
+      background: linear-gradient(90deg, #ffffff 0%, #9b9b9b 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .hero h1 {
+      font-size: clamp(30px, 5vw, 48px);
+      font-weight: 600;
+      line-height: 1.15;
+      max-width: var(--hero-max);
+      margin: 0 0 var(--space-200);
+      text-wrap: balance;
+      color: var(--ink);
+    }
+
+    .hero p.lead {
+      font-size: 18px;
+      line-height: 28px;
+      color: var(--muted);
+      max-width: var(--hero-max);
+      margin: 0 0 var(--space-400);
+      text-wrap: pretty;
+    }
+
+    .cta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-100);
+      margin-bottom: var(--space-300);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-75);
+      padding: 8px 12px;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 600;
+      transition: transform 700ms var(--ease), background 700ms var(--ease), color 700ms var(--ease);
+    }
+    .btn:active { transform: scale(0.98); }
+    .btn:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 3px;
+    }
+    .btn-primary {
+      background: var(--accent);
+      color: #04120f;
+    }
+    .btn-primary:hover { background: #7ff5df; }
+    .btn-ghost {
+      background: transparent;
+      color: var(--ink);
+      border: 1px solid rgba(232,239,233,0.16);
+    }
+    .btn-ghost:hover { background: rgba(255,255,255,0.04); }
+
+    .proof {
+      font-size: 14px;
+      color: var(--muted);
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-200);
+      align-items: center;
+    }
+    .proof strong { color: var(--ink); font-weight: 600; }
+
+    section {
+      padding: var(--space-800) 0;
+    }
+
+    .section-label {
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: var(--space-200);
+    }
+
+    h2 {
+      font-size: clamp(24px, 4vw, 36px);
+      font-weight: 600;
+      line-height: 1.15;
+      margin: 0 0 var(--space-300);
+      max-width: var(--hero-max);
+      text-wrap: balance;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: var(--space-300);
+    }
+    @media (max-width: 860px) {
+      .grid-3 { grid-template-columns: 1fr; }
+    }
+
+    .card {
+      background: var(--bg-2);
+      border: 1px solid rgba(232,239,233,0.08);
+      border-radius: 16px;
+      padding: var(--space-300);
+      transition: transform 700ms var(--ease), border-color 700ms var(--ease);
+    }
+    .card:hover {
+      transform: translateY(-4px);
+      border-color: rgba(94,234,212,0.28);
+    }
+    .card h3 {
+      margin: 0 0 var(--space-75);
+      font-size: 18px;
+      font-weight: 600;
+    }
+    .card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 16px;
+      text-wrap: pretty;
+    }
+    .card .num {
+      font-family: "Geist Mono", ui-monospace, monospace;
+      font-size: 12px;
+      color: var(--accent-2);
+      margin-bottom: var(--space-100);
+      letter-spacing: 0.08em;
+    }
+
+    .tagline {
+      padding: var(--space-900) 0;
+      text-align: left;
+    }
+    .tagline-line {
+      font-size: clamp(36px, 7vw, 60px);
+      font-weight: 600;
+      line-height: 1.1;
+      max-width: 820px;
+      text-wrap: balance;
+      margin: 0;
+    }
+    .tagline-line .w {
+      color: rgba(232,239,233,0.28);
+      transition: color 700ms var(--ease);
+    }
+    .tagline-line .w.on { color: var(--ink); }
+
+    .install {
+      background: #131209;
+      border-radius: 16px;
+      border: 1px solid rgba(232,239,233,0.08);
+      overflow: hidden;
+    }
+    .tabs {
+      display: flex;
+      gap: var(--space-50);
+      padding: var(--space-100);
+      border-bottom: 1px solid rgba(232,239,233,0.08);
+    }
+    .tab {
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--muted);
+      background: transparent;
+    }
+    .tab[aria-selected="true"] {
+      background: rgba(94,234,212,0.12);
+      color: var(--accent);
+    }
+    .panel {
+      display: none;
+      padding: var(--space-300);
+    }
+    .panel.active { display: block; }
+
+    pre, code {
+      font-family: "Geist Mono", ui-monospace, monospace;
+    }
+    pre {
+      margin: 0;
+      padding: var(--space-300);
+      background: #000;
+      border-radius: 12px;
+      overflow-x: auto;
+      font-size: 13px;
+      line-height: 1.6;
+      color: #c8f7e8;
+      border: 1px solid rgba(94,234,212,0.12);
+    }
+    .copy-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: var(--space-200);
+      margin-bottom: var(--space-100);
+    }
+    .copy-row span {
+      font-size: 14px;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .steps {
+      display: grid;
+      gap: var(--space-300);
+      counter-reset: step;
+    }
+    .step {
+      display: grid;
+      grid-template-columns: 48px 1fr;
+      gap: var(--space-200);
+      align-items: start;
+    }
+    .step::before {
+      counter-increment: step;
+      content: counter(step, decimal-leading-zero);
+      font-family: "Geist Mono", monospace;
+      color: var(--accent);
+      font-size: 14px;
+      font-weight: 500;
+      padding-top: 4px;
+    }
+    .step h3 {
+      margin: 0 0 var(--space-50);
+      font-size: 20px;
+      font-weight: 600;
+    }
+    .step p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .faq details {
+      border: 1px solid rgba(232,239,233,0.08);
+      border-radius: 12px;
+      padding: var(--space-200) var(--space-300);
+      background: var(--bg-2);
+      margin-bottom: var(--space-100);
+    }
+    .faq summary {
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 16px;
+      list-style: none;
+    }
+    .faq summary::-webkit-details-marker { display: none; }
+    .faq details[open] summary { color: var(--accent); }
+    .faq p {
+      margin: var(--space-100) 0 0;
+      color: var(--muted);
+      text-wrap: pretty;
+    }
+
+    .final {
+      text-align: center;
+      padding: var(--space-900) 0 var(--space-800);
+    }
+    .final h2 {
+      margin-inline: auto;
+      text-align: center;
+    }
+    .final .cta-row { justify-content: center; }
+
+    footer {
+      border-top: 1px solid rgba(232,239,233,0.08);
+      padding: var(--space-400) 0 var(--space-700);
+      color: var(--muted);
+      font-size: 14px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-200);
+      justify-content: space-between;
+    }
+    footer a:hover { color: var(--ink); }
+
+    .reveal {
+      opacity: 0;
+      filter: blur(8px);
+      transform: translateY(16px);
+      transition: opacity 800ms var(--ease), transform 800ms var(--ease), filter 800ms var(--ease);
+    }
+    .reveal.in {
+      opacity: 1;
+      filter: blur(0);
+      transform: translateY(0);
+    }
+
+    .dither-badge {
+      display: inline-block;
+      image-rendering: pixelated;
+      font-size: 12px;
+      padding: 4px 8px;
+      border: 1px solid rgba(240,180,41,0.4);
+      color: var(--accent-2);
+      background:
+        repeating-linear-gradient(90deg, rgba(240,180,41,0.15) 0 2px, transparent 2px 4px),
+        repeating-linear-gradient(0deg, rgba(240,180,41,0.08) 0 2px, transparent 2px 4px);
+    }
+  </style>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <canvas id="grid-canvas" aria-hidden="true"></canvas>
+  <div id="dither" aria-hidden="true"></div>
+  <div class="scan" aria-hidden="true"></div>
+
+  <div class="shell">
+    <nav class="island" aria-label="Primary">
+      <div class="island-inner">
+        <a class="brand-mark" href="#top">XCAutokit</a>
+        <a href="#install">Install</a>
+        <a href="#build">Build</a>
+        <a href="#faq">FAQ</a>
+        <a class="btn btn-primary" href="#install" style="padding: 8px 12px; font-size: 14px;">Get XCAutokit</a>
+      </div>
+    </nav>
+
+    <main id="main">
+      <header class="hero wrap" id="top">
+        <div class="eyebrow">MCP · CLI · Xcode agents</div>
+        <p class="brand-hero">XCAUTOKIT</p>
+        <h1>Give agents a real Xcode loop,<br />not a pile of shell scripts</h1>
+        <p class="lead">
+          First party MCP server and CLI for iOS work. Build, test, capture, and drive the Simulator.
+          Install like XcodeBuildMCP. Prefer live Xcode tools through mcpbridge when you have 26.3 or newer.
+        </p>
+        <div class="cta-row">
+          <a class="btn btn-primary" href="#install">Install with npm</a>
+          <a class="btn btn-ghost" href="#build">Open the build guide</a>
+        </div>
+        <div class="proof">
+          <span class="dither-badge">47 tools</span>
+          <span><strong>npx</strong> or global CLI</span>
+          <span>Cursor · Claude Code · Codex</span>
+          <span>MIT licensed</span>
+        </div>
+      </header>
+
+      <section class="wrap reveal">
+        <div class="section-label">Why XCAutokit</div>
+        <h2>One install. Full simulator control. Optional live Xcode brain.</h2>
+        <div class="grid-3">
+          <article class="card">
+            <div class="num">01</div>
+            <h3>Agent ready MCP</h3>
+            <p>Drop into Cursor or Claude with the same npx pattern teams already know from XcodeBuildMCP.</p>
+          </article>
+          <article class="card">
+            <div class="num">02</div>
+            <h3>UI that agents can trust</h3>
+            <p>AXe backed taps, swipes, finders, and screenshots so your agent can verify the screen it just changed.</p>
+          </article>
+          <article class="card">
+            <div class="num">03</div>
+            <h3>Ticketed state</h3>
+            <p>Recording and log capture return tickets. Compatible with modern MCP style handles instead of sticky sessions.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="tagline wrap" aria-label="Tagline">
+        <p class="tagline-line" id="tagline">
+          <span class="w">Build</span>
+          <span class="w">it.</span>
+          <span class="w">Boot</span>
+          <span class="w">it.</span>
+          <span class="w">Touch</span>
+          <span class="w">the</span>
+          <span class="w">pixels.</span>
+          <span class="w">Repeat</span>
+          <span class="w">until</span>
+          <span class="w">green.</span>
+        </p>
+      </section>
+
+      <section class="wrap reveal" id="install">
+        <div class="section-label">Get started</div>
+        <h2>Install in seconds, the XcodeBuildMCP way</h2>
+        <div class="install">
+          <div class="tabs" role="tablist">
+            <button class="tab" role="tab" aria-selected="true" data-tab="mcp">MCP server</button>
+            <button class="tab" role="tab" aria-selected="false" data-tab="cli">CLI</button>
+            <button class="tab" role="tab" aria-selected="false" data-tab="local">From this repo</button>
+          </div>
+          <div class="panel active" data-panel="mcp">
+            <div class="copy-row">
+              <span>Add to ~/.cursor/mcp.json or project .cursor/mcp.json</span>
+              <button class="btn btn-ghost" style="font-size:14px" data-copy="mcp-json">Copy</button>
+            </div>
+            <pre id="mcp-json">{
+  "mcpServers": {
+    "xcautokit": {
+      "command": "npx",
+      "args": ["-y", "xcautokit@latest", "mcp"]
+    }
+  }
+}</pre>
+          </div>
+          <div class="panel" data-panel="cli">
+            <div class="copy-row">
+              <span>Global CLI</span>
+              <button class="btn btn-ghost" style="font-size:14px" data-copy="cli-cmd">Copy</button>
+            </div>
+            <pre id="cli-cmd">npm install -g xcautokit@latest
+xcautokit doctor
+xcautokit tools
+xcautokit mcp</pre>
+          </div>
+          <div class="panel" data-panel="local">
+            <div class="copy-row">
+              <span>Local development from this checkout</span>
+              <button class="btn btn-ghost" style="font-size:14px" data-copy="local-cmd">Copy</button>
+            </div>
+            <pre id="local-cmd">cd /Users/ezrablack/Developer/XCAutokit
+npm install
+npm run build:go
+npm link
+xcautokit doctor
+xcautokit init
+# MCP:
+# "command": "xcautokit", "args": ["mcp"]</pre>
+          </div>
+        </div>
+      </section>
+
+      <section class="wrap reveal" id="build">
+        <div class="section-label">Build guide</div>
+        <h2>How to build and ship XCAutokit for other people</h2>
+        <div class="steps">
+          <div class="step">
+            <div>
+              <h3>Build the Go binary</h3>
+              <p><code>go build -o autokit .</code> or <code>npm run build:go</code>. Output lands in <code>dist/autokit-darwin-arm64</code> and <code>./autokit</code>.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div>
+              <h3>Expose the CLI entry</h3>
+              <p>The npm bin is <code>npm/bin/autokit.js</code>. It spawns the native binary. Subcommands: <code>mcp</code>, <code>tools</code>, <code>doctor</code>, <code>init</code>, <code>status</code>.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div>
+              <h3>Link or publish</h3>
+              <p>For you: <code>npm link</code>. For others: publish the <code>xcautokit</code> package to npm, then they run <code>npx -y xcautokit@latest mcp</code> exactly like XcodeBuildMCP.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div>
+              <h3>Prime agent projects</h3>
+              <p><code>xcautokit init</code> writes <code>AGENTS.md</code> and a project MCP snippet so agents know the ticket workflow and tool order.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div>
+              <h3>Optional Xcode live backend</h3>
+              <p>Xcode 26.3+, project open, Settings → Intelligence → Allow external agents. XCAutokit uses <code>xcrun mcpbridge</code> internally when present.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="wrap reveal">
+        <div class="section-label">Claude era MCP</div>
+        <h2>Compatible with modern MCP thinking</h2>
+        <div class="grid-3">
+          <article class="card">
+            <h3>Tickets over sticky memory</h3>
+            <p>Start tools return a ticket. Stop tools take that ticket back. Same idea as the new MCP “ticket is the key” model.</p>
+          </article>
+          <article class="card">
+            <h3>Any client, one command</h3>
+            <p>stdio MCP stays the default for Cursor and Claude Code. No load balancer drama for local agent work.</p>
+          </article>
+          <article class="card">
+            <h3>Xcode as backend, XCAutokit as brand</h3>
+            <p>We keep XCAutokit tool names. mcpbridge is an internal capability, not a second MCP you have to juggle.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="wrap faq reveal" id="faq">
+        <div class="section-label">FAQ</div>
+        <h2>Questions before you install</h2>
+        <details>
+          <summary>How is this different from XcodeBuildMCP?</summary>
+          <p>Same install shape (npx + CLI), first party XCAutokit surface, and an internal Xcode mcpbridge backend. No competitor MCP required in your config.</p>
+        </details>
+        <details>
+          <summary>Do I need Node to run XCAutokit forever?</summary>
+          <p>Node is the distribution wrapper. The engine is a Go binary. Homebrew style direct binary installs can ship later the same way.</p>
+        </details>
+        <details>
+          <summary>What if I am still on Xcode 26.2?</summary>
+          <p>XCAutokit still works. Build and test use xcodebuild. Upgrade to 26.3+ when you want live Issue Navigator, previews, and docs search.</p>
+        </details>
+        <details>
+          <summary>What is a ticket?</summary>
+          <p>A small handle like <code>xca_rec_…</code> returned by record_start or start_sim_log_cap. Pass it to the matching stop tool. That is the modern MCP state pattern.</p>
+        </details>
+        <details>
+          <summary>Where do I open this page?</summary>
+          <p>Open <code>site/index.html</code> in your browser from the XCAutokit repo. It is a local sales and build guide, not a public site yet.</p>
+        </details>
+        <details>
+          <summary>What dependencies do agents need?</summary>
+          <p>macOS, Xcode CLT, and <code>axe</code> on PATH for UI automation. Run <code>xcautokit doctor</code> to verify.</p>
+        </details>
+      </section>
+
+      <section class="final wrap reveal">
+        <div class="section-label">Final step</div>
+        <h2>Install XCAutokit and let your agent touch the Simulator</h2>
+        <div class="cta-row">
+          <a class="btn btn-primary" href="#install">Get XCAutokit</a>
+          <a class="btn btn-ghost" href="#build">Read the build guide</a>
+        </div>
+        <p class="proof" style="justify-content:center;margin-top:24px">Free · MIT · Cancel anytime by deleting one MCP entry</p>
+      </section>
+    </main>
+
+    <footer class="wrap">
+      <div>© 2026 XCAutokit</div>
+      <div>
+        <a href="../AGENTS.md">AGENTS.md</a> ·
+        <a href="../README.md">README</a> ·
+        <a href="../LICENSE">License</a>
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    // Tabs
+    document.querySelectorAll('.tab').forEach((tab) => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach((t) => t.setAttribute('aria-selected', 'false'));
+        document.querySelectorAll('.panel').forEach((p) => p.classList.remove('active'));
+        tab.setAttribute('aria-selected', 'true');
+        document.querySelector(`[data-panel="${tab.dataset.tab}"]`).classList.add('active');
+      });
+    });
+
+    // Copy buttons
+    document.querySelectorAll('[data-copy]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const el = document.getElementById(btn.dataset.copy);
+        await navigator.clipboard.writeText(el.innerText);
+        const old = btn.textContent;
+        btn.textContent = 'Copied';
+        setTimeout(() => (btn.textContent = old), 1200);
+      });
+    });
+
+    // Reveal on view
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((e) => {
+        if (e.isIntersecting) e.target.classList.add('in');
+      });
+    }, { threshold: 0.15 });
+    document.querySelectorAll('.reveal').forEach((el) => io.observe(el));
+
+    // Tagline word reveal
+    const words = document.querySelectorAll('#tagline .w');
+    const tagIO = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        words.forEach((w, i) => {
+          setTimeout(() => w.classList.add('on'), i * 90);
+        });
+      });
+    }, { threshold: 0.4 });
+    tagIO.observe(document.getElementById('tagline'));
+
+    // 3D rippling grid (Canvas 2D perspective)
+    const canvas = document.getElementById('grid-canvas');
+    const ctx = canvas.getContext('2d');
+    let w, h, t = 0, mx = 0.5, my = 0.35;
+
+    function resize() {
+      w = canvas.width = window.innerWidth * devicePixelRatio;
+      h = canvas.height = window.innerHeight * devicePixelRatio;
+      canvas.style.width = window.innerWidth + 'px';
+      canvas.style.height = window.innerHeight + 'px';
+      ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    window.addEventListener('pointermove', (e) => {
+      mx = e.clientX / window.innerWidth;
+      my = e.clientY / window.innerHeight;
+    }, { passive: true });
+
+    function project(x, y, z) {
+      const fov = 520;
+      const scale = fov / (fov + z);
+      const cx = window.innerWidth * 0.5 + (mx - 0.5) * 80;
+      const cy = window.innerHeight * 0.62 + (my - 0.5) * 40;
+      return [cx + x * scale, cy + y * scale, scale];
+    }
+
+    function frame(now) {
+      t = now * 0.001;
+      const W = window.innerWidth;
+      const H = window.innerHeight;
+      ctx.clearRect(0, 0, W, H);
+
+      // flat void under grid
+      ctx.fillStyle = '#0a0c0e';
+      ctx.fillRect(0, 0, W, H);
+
+      const cols = 28;
+      const rows = 36;
+      const spacing = 48;
+      const points = [];
+
+      for (let iz = 0; iz < rows; iz++) {
+        for (let ix = 0; ix < cols; ix++) {
+          const x = (ix - cols / 2) * spacing;
+          const z = iz * spacing * 0.9 + 40;
+          const dist = Math.hypot(ix - cols * mx, iz - rows * my);
+          const ripple = Math.sin(dist * 0.55 - t * 3.2) * 10 * Math.exp(-dist * 0.08);
+          const y = 40 + ripple;
+          const [px, py, s] = project(x, y, z);
+          points.push({ px, py, s, iz, ix });
+        }
+      }
+
+      ctx.lineWidth = 1;
+      for (let iz = 0; iz < rows; iz++) {
+        for (let ix = 0; ix < cols - 1; ix++) {
+          const a = points[iz * cols + ix];
+          const b = points[iz * cols + ix + 1];
+          const alpha = 0.08 + a.s * 0.35;
+          ctx.strokeStyle = `rgba(94, 234, 212, ${alpha})`;
+          ctx.beginPath();
+          ctx.moveTo(a.px, a.py);
+          ctx.lineTo(b.px, b.py);
+          ctx.stroke();
+        }
+      }
+      for (let ix = 0; ix < cols; ix++) {
+        for (let iz = 0; iz < rows - 1; iz++) {
+          const a = points[iz * cols + ix];
+          const b = points[(iz + 1) * cols + ix];
+          const alpha = 0.05 + a.s * 0.28;
+          ctx.strokeStyle = `rgba(240, 180, 41, ${alpha * 0.55})`;
+          ctx.beginPath();
+          ctx.moveTo(a.px, a.py);
+          ctx.lineTo(b.px, b.py);
+          ctx.stroke();
+        }
+      }
+
+      // dithered horizon glow (flat rect + noise dots)
+      const g = ctx.createRadialGradient(W * 0.5, H * 0.55, 10, W * 0.5, H * 0.55, H * 0.55);
+      g.addColorStop(0, 'rgba(94,234,212,0.12)');
+      g.addColorStop(1, 'rgba(10,12,14,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      canvas.style.display = 'none';
+    }
+  </script>
+</body>
+</html>

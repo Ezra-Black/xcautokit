@@ -1,0 +1,47 @@
+# Binaries
+/xcautokit
+/dist/
+*.exe
+*.test
+*.out
+
+# Go
+/vendor/
+
+# Node
+node_modules/
+npm-debug.log*
+package-lock.json
+yarn.lock
+
+# Swift / SPM
+apps/**/.build/
+apps/**/*.xcodeproj/
+apps/**/DerivedData/
+.swiftpm/
+
+# macOS
+.DS_Store
+*.swp
+*~
+
+# Env / secrets
+.env
+.env.*
+*.pem
+
+# IDE / local
+.cursor/
+.idea/
+.vscode/
+*.xcuserdata/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Studio local (user library lives in ~/.xcautokit)
+*.mov
+*.mp4

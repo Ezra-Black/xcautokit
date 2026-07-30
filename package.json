@@ -1,0 +1,47 @@
+{
+  "name": "xcautokit",
+  "version": "1.0.0",
+  "description": "XCAutokit — first-party MCP server and CLI for Xcode + iOS Simulator automation",
+  "keywords": [
+    "mcp",
+    "modelcontextprotocol",
+    "xcode",
+    "ios",
+    "simulator",
+    "xcautokit",
+    "autokit"
+  ],
+  "license": "MIT",
+  "author": "XCAutokit",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xcautokit/xcautokit.git"
+  },
+  "homepage": "https://github.com/xcautokit/xcautokit",
+  "engines": {
+    "node": ">=18"
+  },
+  "os": [
+    "darwin"
+  ],
+  "bin": {
+    "xcautokit": "npm/bin/xcautokit.js"
+  },
+  "files": [
+    "npm/",
+    "internal/",
+    "main.go",
+    "go.mod",
+    "go.sum",
+    "AGENTS.md",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build:go": "node npm/scripts/build-go.js",
+    "postinstall": "node npm/scripts/postinstall.js",
+    "prepack": "node npm/scripts/build-go.js",
+    "test:mcp": "python3 scripts/mcp_smoke_test.py"
+  },
+  "preferGlobal": true
+}
