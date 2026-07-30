@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="XCAutokit">
+  <rect width="64" height="64" rx="14" fill="#0F766E"/>
+  <path d="M18 20h10l4 8 4-8h10l-9 16 9 16H36l-4-8-4 8H18l9-16-9-16z" fill="#ECFDF5"/>
+  <circle cx="48" cy="48" r="6" fill="#FBBF24"/>
+</svg>

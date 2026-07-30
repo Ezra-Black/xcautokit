@@ -17,7 +17,7 @@
     "type": "git",
     "url": "git+https://github.com/Ezra-Black/xcautokit.git"
   },
-  "homepage": "https://github.com/Ezra-Black/xcautokit",
+  "homepage": "https://ezra-black.github.io/xcautokit/",
   "engines": {
     "node": ">=18"
   },

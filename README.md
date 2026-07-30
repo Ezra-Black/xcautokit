@@ -40,7 +40,7 @@ xcautokit doctor
 xcautokit init
 ```
 
-Local sales / build guide: open [`site/index.html`](site/index.html) in your browser.
+Marketing site (GitHub Pages): [`docs/index.html`](docs/index.html) · live at [ezra-black.github.io/xcautokit](https://ezra-black.github.io/xcautokit/).
 
 ## CLI
 

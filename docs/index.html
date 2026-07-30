@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>XCAutokit — MCP server and CLI for Xcode agents</title>
+  <meta name="description" content="Give AI agents full control over Xcode and the iOS Simulator. Build, test, tap, and capture with one MCP install." />
+  <meta name="theme-color" content="#F4F7F8" />
+  <link rel="canonical" href="https://ezra-black.github.io/xcautokit/" />
+  <meta property="og:title" content="XCAutokit" />
+  <meta property="og:description" content="MCP server and CLI for Xcode and iOS Simulator automation." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://ezra-black.github.io/xcautokit/" />
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #F4F7F8;
+      --bg-elevated: #FFFFFF;
+      --ink: #101828;
+      --muted: #667085;
+      --line: rgba(16, 24, 40, 0.08);
+      --accent: #0F766E;
+      --accent-soft: #CCFBF1;
+      --accent-ink: #042F2E;
+      --warn: #B45309;
+      --space-50: 4px;
+      --space-75: 8px;
+      --space-100: 12px;
+      --space-200: 16px;
+      --space-300: 24px;
+      --space-400: 32px;
+      --space-500: 40px;
+      --space-600: 48px;
+      --space-700: 64px;
+      --space-800: 80px;
+      --space-900: 96px;
+      --ease: cubic-bezier(0.32, 0.72, 0, 1);
+      --max: 1120px;
+      --hero-max: 680px;
+      --radius: 16px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: Manrope, system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.5;
+      overflow-x: hidden;
+    }
+    a { color: inherit; text-decoration: none; }
+    button, .btn {
+      font: inherit;
+      cursor: pointer;
+      border: none;
+      appearance: none;
+    }
+    img { max-width: 100%; display: block; }
+
+    .skip {
+      position: absolute;
+      left: -999px;
+      top: 0;
+      background: var(--accent);
+      color: #fff;
+      padding: var(--space-75) var(--space-100);
+      z-index: 100;
+      border-radius: 8px;
+    }
+    .skip:focus { left: var(--space-200); top: var(--space-200); }
+
+    .atmosphere {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(900px 480px at 12% -10%, rgba(15, 118, 110, 0.14), transparent 60%),
+        radial-gradient(700px 420px at 90% 8%, rgba(180, 83, 9, 0.08), transparent 55%),
+        linear-gradient(180deg, #EEF3F5 0%, var(--bg) 42%, #EEF2F4 100%);
+    }
+    .atmosphere::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      opacity: 0.35;
+      background-image:
+        linear-gradient(rgba(16, 24, 40, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(16, 24, 40, 0.03) 1px, transparent 1px);
+      background-size: 48px 48px;
+      mask-image: linear-gradient(180deg, #000 0%, transparent 70%);
+    }
+
+    .shell { position: relative; z-index: 1; }
+
+    .wrap {
+      width: min(100% - 48px, var(--max));
+      margin-inline: auto;
+    }
+
+    nav.island {
+      position: sticky;
+      top: 0;
+      z-index: 30;
+      display: flex;
+      justify-content: center;
+      padding-top: var(--space-300);
+    }
+    .island-inner {
+      display: flex;
+      align-items: center;
+      gap: var(--space-300);
+      padding: var(--space-75) var(--space-75) var(--space-75) var(--space-200);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.78);
+      backdrop-filter: blur(20px);
+      border: 1px solid var(--line);
+      box-shadow: 0 10px 30px rgba(16, 24, 40, 0.06);
+      transition: transform 700ms var(--ease);
+    }
+    .brand-mark {
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      color: var(--accent);
+    }
+    .island-inner a:not(.btn) {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--muted);
+      transition: color 700ms var(--ease);
+    }
+    .island-inner a:not(.btn):hover,
+    .island-inner a:not(.btn):focus-visible { color: var(--ink); }
+    .nav-cta { font-size: 14px !important; }
+
+    .hero {
+      padding: var(--space-700) 0 var(--space-800);
+      min-height: min(92vh, 900px);
+      display: grid;
+      align-content: center;
+      gap: var(--space-600);
+    }
+    .hero-copy { max-width: var(--hero-max); }
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-75);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: var(--space-300);
+    }
+    .eyebrow::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--accent);
+      box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.15);
+    }
+    .brand-hero {
+      margin: 0 0 var(--space-200);
+      font-size: clamp(48px, 10vw, 80px);
+      font-weight: 700;
+      line-height: 1;
+      letter-spacing: -0.04em;
+      max-width: var(--hero-max);
+      text-wrap: balance;
+      background: linear-gradient(90deg, #000000 0%, #666666 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    .hero h1 {
+      margin: 0 0 var(--space-200);
+      max-width: var(--hero-max);
+      font-size: clamp(24px, 4vw, 36px);
+      font-weight: 600;
+      line-height: 1.2;
+      text-wrap: balance;
+      color: var(--ink);
+    }
+    .lead {
+      margin: 0 0 var(--space-400);
+      max-width: var(--hero-max);
+      font-size: 18px;
+      line-height: 28px;
+      color: var(--muted);
+      text-wrap: pretty;
+    }
+    .cta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-100);
+      margin-bottom: var(--space-300);
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-75);
+      padding: 8px 12px;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 600;
+      transition: transform 700ms var(--ease), background 700ms var(--ease), color 700ms var(--ease), border-color 700ms var(--ease);
+    }
+    .btn:active { transform: scale(0.98); }
+    .btn:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 3px;
+    }
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+    }
+    .btn-primary:hover { background: #0D9488; }
+    .btn-ghost {
+      background: var(--bg-elevated);
+      color: var(--ink);
+      border: 1px solid var(--line);
+    }
+    .btn-ghost:hover { border-color: rgba(15, 118, 110, 0.35); }
+    .proof {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-200);
+      align-items: center;
+      font-size: 14px;
+      color: var(--muted);
+    }
+    .proof strong { color: var(--ink); font-weight: 600; }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent-ink);
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .hero-visual {
+      position: relative;
+      width: 100%;
+      border-radius: 24px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      background:
+        radial-gradient(600px 280px at 20% 20%, rgba(15, 118, 110, 0.18), transparent 60%),
+        #0B1220;
+      min-height: 360px;
+      box-shadow: 0 24px 60px rgba(16, 24, 40, 0.12);
+    }
+    .hero-visual-grid {
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px);
+      background-size: 40px 40px;
+      opacity: 0.7;
+    }
+    .stage {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap: var(--space-300);
+      padding: var(--space-400);
+      align-items: stretch;
+    }
+    @media (max-width: 860px) {
+      .stage { grid-template-columns: 1fr; }
+      .island-inner { gap: var(--space-100); flex-wrap: wrap; justify-content: center; }
+      .island-inner a:not(.brand-mark):not(.btn) { display: none; }
+    }
+    .terminal {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 16px;
+      overflow: hidden;
+      color: #E5E7EB;
+      font-family: "Geist Mono", ui-monospace, monospace;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    .terminal-bar {
+      display: flex;
+      gap: 6px;
+      padding: 12px 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      background: rgba(0,0,0,0.2);
+    }
+    .terminal-bar i {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: block;
+      background: #334155;
+    }
+    .terminal-bar i:nth-child(1) { background: #F87171; }
+    .terminal-bar i:nth-child(2) { background: #FBBF24; }
+    .terminal-bar i:nth-child(3) { background: #34D399; }
+    .terminal pre {
+      margin: 0;
+      padding: var(--space-300);
+      white-space: pre-wrap;
+      color: #A7F3D0;
+    }
+    .terminal .dim { color: #94A3B8; }
+    .terminal .cmd { color: #F8FAFC; }
+    .phone {
+      justify-self: end;
+      width: min(100%, 220px);
+      aspect-ratio: 9 / 19;
+      border-radius: 28px;
+      border: 8px solid #111827;
+      background: linear-gradient(180deg, #134E4A 0%, #042F2E 100%);
+      box-shadow: 0 20px 40px rgba(0,0,0,0.35);
+      position: relative;
+      overflow: hidden;
+      color: #ECFDF5;
+      padding: var(--space-300) var(--space-200);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-200);
+    }
+    .phone::before {
+      content: "";
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 72px;
+      height: 18px;
+      border-radius: 999px;
+      background: #0B1220;
+    }
+    .phone .pill {
+      margin-top: var(--space-400);
+      align-self: flex-start;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.12);
+    }
+    .phone h3 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 600;
+      line-height: 1.2;
+      font-family: Manrope, sans-serif;
+    }
+    .phone p {
+      margin: 0;
+      font-size: 12px;
+      color: rgba(236, 253, 245, 0.72);
+      font-family: Manrope, sans-serif;
+    }
+    .phone .tap {
+      margin-top: auto;
+      height: 44px;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.14);
+      border: 1px solid rgba(255,255,255,0.18);
+      display: grid;
+      place-items: center;
+      font-size: 12px;
+      font-weight: 600;
+      font-family: Manrope, sans-serif;
+      animation: pulse 2.4s var(--ease) infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(0.98); box-shadow: 0 0 0 8px rgba(45, 212, 191, 0.08); }
+    }
+
+    section { padding: var(--space-800) 0; }
+    .section-label {
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: var(--space-200);
+    }
+    h2 {
+      margin: 0 0 var(--space-300);
+      max-width: var(--hero-max);
+      font-size: clamp(24px, 4vw, 36px);
+      font-weight: 600;
+      line-height: 1.15;
+      text-wrap: balance;
+    }
+    .section-lead {
+      margin: calc(var(--space-300) * -1) 0 var(--space-500);
+      max-width: 640px;
+      color: var(--muted);
+      font-size: 16px;
+      text-wrap: pretty;
+    }
+
+    .features {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: var(--space-300);
+    }
+    @media (max-width: 900px) {
+      .features { grid-template-columns: 1fr; }
+    }
+    .feature {
+      padding: var(--space-300);
+      border-radius: var(--radius);
+      background: var(--bg-elevated);
+      border: 1px solid var(--line);
+      transition: transform 700ms var(--ease), border-color 700ms var(--ease), box-shadow 700ms var(--ease);
+    }
+    .feature:hover {
+      transform: translateY(-4px);
+      border-color: rgba(15, 118, 110, 0.28);
+      box-shadow: 0 16px 40px rgba(16, 24, 40, 0.06);
+    }
+    .feature .icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      background: var(--accent-soft);
+      color: var(--accent);
+      margin-bottom: var(--space-200);
+    }
+    .feature h3 {
+      margin: 0 0 var(--space-75);
+      font-size: 18px;
+      font-weight: 600;
+    }
+    .feature p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 16px;
+      text-wrap: pretty;
+    }
+
+    .tagline {
+      padding: var(--space-900) 0;
+    }
+    .tagline-line {
+      margin: 0;
+      max-width: 820px;
+      font-size: clamp(36px, 7vw, 60px);
+      font-weight: 600;
+      line-height: 1.1;
+      text-wrap: balance;
+    }
+    .tagline-line .w {
+      color: rgba(16, 24, 40, 0.28);
+      transition: color 700ms var(--ease);
+    }
+    .tagline-line .w.on { color: var(--ink); }
+
+    .install-shell {
+      background: var(--bg-elevated);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 16px 40px rgba(16, 24, 40, 0.04);
+    }
+    .tabs {
+      display: flex;
+      gap: var(--space-50);
+      padding: var(--space-100);
+      border-bottom: 1px solid var(--line);
+      background: #F8FAFC;
+    }
+    .tab {
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--muted);
+      background: transparent;
+      transition: background 700ms var(--ease), color 700ms var(--ease);
+    }
+    .tab[aria-selected="true"] {
+      background: var(--accent-soft);
+      color: var(--accent-ink);
+    }
+    .panel { display: none; padding: var(--space-300); }
+    .panel.active { display: block; }
+    .copy-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: var(--space-200);
+      margin-bottom: var(--space-100);
+    }
+    .copy-row span {
+      font-size: 14px;
+      color: var(--muted);
+      font-weight: 600;
+    }
+    pre, code { font-family: "Geist Mono", ui-monospace, monospace; }
+    pre {
+      margin: 0;
+      padding: var(--space-300);
+      background: #0B1220;
+      border-radius: 12px;
+      overflow-x: auto;
+      font-size: 13px;
+      line-height: 1.65;
+      color: #A7F3D0;
+      border: 1px solid rgba(15, 118, 110, 0.25);
+    }
+
+    .steps {
+      display: grid;
+      gap: var(--space-300);
+      counter-reset: step;
+    }
+    .step {
+      display: grid;
+      grid-template-columns: 48px 1fr;
+      gap: var(--space-200);
+      align-items: start;
+      padding: var(--space-300);
+      border-radius: var(--radius);
+      background: var(--bg-elevated);
+      border: 1px solid var(--line);
+    }
+    .step::before {
+      counter-increment: step;
+      content: counter(step, decimal-leading-zero);
+      font-family: "Geist Mono", monospace;
+      color: var(--accent);
+      font-size: 14px;
+      font-weight: 500;
+      padding-top: 4px;
+    }
+    .step h3 {
+      margin: 0 0 var(--space-50);
+      font-size: 20px;
+      font-weight: 600;
+    }
+    .step p {
+      margin: 0;
+      color: var(--muted);
+      text-wrap: pretty;
+    }
+
+    .clients {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-100);
+    }
+    .client {
+      padding: 8px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: var(--bg-elevated);
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--muted);
+    }
+
+    .faq details {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: var(--space-200) var(--space-300);
+      background: var(--bg-elevated);
+      margin-bottom: var(--space-100);
+    }
+    .faq summary {
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 16px;
+      list-style: none;
+    }
+    .faq summary::-webkit-details-marker { display: none; }
+    .faq details[open] summary { color: var(--accent); }
+    .faq p {
+      margin: var(--space-100) 0 0;
+      color: var(--muted);
+      text-wrap: pretty;
+    }
+
+    .final {
+      text-align: center;
+      padding: var(--space-900) 0 var(--space-800);
+    }
+    .final h2 {
+      margin-inline: auto;
+      text-align: center;
+    }
+    .final .cta-row { justify-content: center; }
+    .final .proof { justify-content: center; margin-top: var(--space-300); }
+
+    footer {
+      border-top: 1px solid var(--line);
+      padding: var(--space-400) 0 var(--space-700);
+      color: var(--muted);
+      font-size: 14px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-200);
+      justify-content: space-between;
+    }
+    footer a:hover { color: var(--ink); }
+
+    .reveal {
+      opacity: 0;
+      filter: blur(8px);
+      transform: translateY(16px);
+      transition: opacity 800ms var(--ease), transform 800ms var(--ease), filter 800ms var(--ease);
+    }
+    .reveal.in {
+      opacity: 1;
+      filter: blur(0);
+      transform: translateY(0);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation: none !important;
+        transition: none !important;
+      }
+      .reveal { opacity: 1; filter: none; transform: none; }
+      .tagline-line .w { color: var(--ink); }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <div class="atmosphere" aria-hidden="true"></div>
+
+  <div class="shell">
+    <nav class="island" aria-label="Primary">
+      <div class="island-inner">
+        <a class="brand-mark" href="#top">XCAutokit</a>
+        <a href="#features">Features</a>
+        <a href="#install">Install</a>
+        <a href="#faq">FAQ</a>
+        <a class="btn btn-ghost nav-cta" href="https://github.com/Ezra-Black/xcautokit">GitHub</a>
+        <a class="btn btn-primary nav-cta" href="#install">Get started</a>
+      </div>
+    </nav>
+
+    <main id="main">
+      <header class="hero wrap" id="top">
+        <div class="hero-copy">
+          <div class="eyebrow">Available now</div>
+          <p class="brand-hero">XCAutokit</p>
+          <h1>AI powered Xcode automation<br />for the Simulator loop</h1>
+          <p class="lead">
+            An MCP server and CLI that lets agents build, test, screenshot, and drive iOS Simulator UI without leaving Cursor, Claude Code, or Codex.
+          </p>
+          <div class="cta-row">
+            <a class="btn btn-primary" href="#install">Get started</a>
+            <a class="btn btn-ghost" href="https://github.com/Ezra-Black/xcautokit">View on GitHub</a>
+          </div>
+          <div class="proof">
+            <span class="chip">49 tools</span>
+            <span><strong>MIT</strong> licensed</span>
+            <span>Open source</span>
+            <span>npx in seconds</span>
+          </div>
+        </div>
+
+        <div class="hero-visual" aria-hidden="true">
+          <div class="hero-visual-grid"></div>
+          <div class="stage">
+            <div class="terminal">
+              <div class="terminal-bar"><i></i><i></i><i></i></div>
+              <pre><span class="dim">$</span> <span class="cmd">xcautokit tools</span>
+<span class="dim">49 tools · build · ui · capture · xcode</span>
+
+<span class="dim">$</span> <span class="cmd">build_run_sim --scheme MyApp</span>
+Build succeeded. Launching on iPhone 15 Pro…
+
+<span class="dim">$</span> <span class="cmd">ui_summary</span>
+Screen ready · no interrupt · 12 elements</pre>
+            </div>
+            <div class="phone">
+              <span class="pill">Simulator</span>
+              <h3>Agents that can tap</h3>
+              <p>Find UI, dismiss alerts, capture video, replay the loop.</p>
+              <div class="tap">Tap Continue</div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <section class="wrap reveal" id="features">
+        <div class="section-label">Why XCAutokit</div>
+        <h2>Everything agents need for the iOS loop</h2>
+        <p class="section-lead">One server for project discovery, simulator control, UI automation, capture, and optional live Xcode tools.</p>
+        <div class="features">
+          <article class="feature">
+            <div class="icon" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 256 256" fill="currentColor"><path d="M208,80H176V48a24,24,0,0,0-24-24H48A24,24,0,0,0,24,48V176a24,24,0,0,0,24,24H80v32a24,24,0,0,0,24,24H208a24,24,0,0,0,24-24V104A24,24,0,0,0,208,80ZM48,176V48H152V80H80A24,24,0,0,0,56,104v72Zm160,32H104V104h104Z"/></svg>
+            </div>
+            <h3>Build and run</h3>
+            <p>Discover projects, list schemes, build for Simulator, launch apps, and run tests from the agent.</p>
+          </article>
+          <article class="feature">
+            <div class="icon" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 256 256" fill="currentColor"><path d="M216,40H40A16,16,0,0,0,24,56V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A16,16,0,0,0,216,40Zm0,160H40V56H216V200ZM176,96a8,8,0,0,1-8,8H88a8,8,0,0,1,0-16h80A8,8,0,0,1,176,96Zm0,32a8,8,0,0,1-8,8H88a8,8,0,0,1,0-16h80A8,8,0,0,1,176,128Zm0,32a8,8,0,0,1-8,8H88a8,8,0,0,1,0-16h80A8,8,0,0,1,176,160Z"/></svg>
+            </div>
+            <h3>UI automation</h3>
+            <p>Tap, swipe, type, long press, and read the accessibility tree so agents verify what they just changed.</p>
+          </article>
+          <article class="feature">
+            <div class="icon" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 256 256" fill="currentColor"><path d="M224,48H32A16,16,0,0,0,16,64V192a16,16,0,0,0,16,16H224a16,16,0,0,0,16-16V64A16,16,0,0,0,224,48Zm0,144H32V64H224V192ZM176,88a8,8,0,0,1-8,8H88a8,8,0,0,1,0-16h80A8,8,0,0,1,176,88Zm24,40a8,8,0,0,1-8,8H64a8,8,0,0,1,0-16H192A8,8,0,0,1,200,128Zm0,40a8,8,0,0,1-8,8H64a8,8,0,0,1,0-16H192A8,8,0,0,1,200,168Z"/></svg>
+            </div>
+            <h3>Interrupt aware</h3>
+            <p>Detect permission sheets and system alerts, then dismiss them with an explicit accept or decline action.</p>
+          </article>
+          <article class="feature">
+            <div class="icon" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 256 256" fill="currentColor"><path d="M208,56H180.28L166.65,35.56A8,8,0,0,0,160,32H96a8,8,0,0,0-6.65,3.56L75.71,56H48A24,24,0,0,0,24,80V192a24,24,0,0,0,24,24H208a24,24,0,0,0,24-24V80A24,24,0,0,0,208,56Zm8,136a8,8,0,0,1-8,8H48a8,8,0,0,1-8-8V80a8,8,0,0,1,8-8H80a8,8,0,0,0,6.65-3.56L100.28,48h55.43l13.64,20.44A8,8,0,0,0,176,72h32a8,8,0,0,1,8,8ZM128,88a44,44,0,1,0,44,44A44.05,44.05,0,0,0,128,88Zm0,72a28,28,0,1,1,28-28A28,28,0,0,1,128,160Z"/></svg>
+            </div>
+            <h3>Capture with tickets</h3>
+            <p>Screenshots, video, and log capture return ticket handles. Stop tools take the ticket back. Clean MCP state.</p>
+          </article>
+          <article class="feature">
+            <div class="icon" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 256 256" fill="currentColor"><path d="M216,40H40A16,16,0,0,0,24,56V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A16,16,0,0,0,216,40Zm0,160H40V56H216V200ZM176,88a8,8,0,0,1-8,8H88a8,8,0,0,1,0-16h80A8,8,0,0,1,176,88Zm0,40a8,8,0,0,1-8,8H88a8,8,0,0,1,0-16h80A8,8,0,0,1,176,128Zm-32,40a8,8,0,0,1-8,8H88a8,8,0,0,1,0-16h48A8,8,0,0,1,144,168Z"/></svg>
+            </div>
+            <h3>Live Xcode backend</h3>
+            <p>On Xcode 26.3+, use mcpbridge for Issue Navigator, previews, and docs. Older Xcode falls back to xcodebuild.</p>
+          </article>
+          <article class="feature">
+            <div class="icon" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 256 256" fill="currentColor"><path d="M117.25,188.49A58.5,58.5,0,0,1,76.08,72.33l35.77,35.77a8,8,0,0,0,11.31-11.31L87.39,61A58.5,58.5,0,0,1,203.67,179.92l-35.77-35.77a8,8,0,0,0-11.31,11.31l35.77,35.77A58.28,58.28,0,0,1,117.25,188.49ZM224,48V88a8,8,0,0,1-16,0V67.31l-26.34,26.35a8,8,0,0,1-11.32-11.32L196.69,56H176a8,8,0,0,1,0-16h40A8,8,0,0,1,224,48ZM48,208a8,8,0,0,0,8-8V179.31l26.34,26.35a8,8,0,0,0,11.32-11.32L67.31,168H88a8,8,0,0,0,0-16H48a8,8,0,0,0-8,8v40A8,8,0,0,0,48,208Z"/></svg>
+            </div>
+            <h3>First class CLI</h3>
+            <p>Every workflow is available from the terminal for scripting, CI, and doctor checks next to your agent.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="tagline wrap" aria-label="Tagline">
+        <p class="tagline-line" id="tagline">
+          <span class="w">Build</span>
+          <span class="w">it.</span>
+          <span class="w">Boot</span>
+          <span class="w">it.</span>
+          <span class="w">Touch</span>
+          <span class="w">the</span>
+          <span class="w">pixels.</span>
+          <span class="w">Repeat</span>
+          <span class="w">until</span>
+          <span class="w">green.</span>
+        </p>
+      </section>
+
+      <section class="wrap reveal" id="install">
+        <div class="section-label">Get started</div>
+        <h2>Install in seconds</h2>
+        <p class="section-lead">Add XCAutokit as an MCP server for your coding agent, or install the global CLI.</p>
+        <div class="install-shell">
+          <div class="tabs" role="tablist" aria-label="Install options">
+            <button class="tab" role="tab" aria-selected="true" data-tab="mcp">MCP server</button>
+            <button class="tab" role="tab" aria-selected="false" data-tab="cli">CLI</button>
+            <button class="tab" role="tab" aria-selected="false" data-tab="doctor">Doctor</button>
+          </div>
+          <div class="panel active" data-panel="mcp">
+            <div class="copy-row">
+              <span>Add to your MCP client config</span>
+              <button class="btn btn-ghost" style="font-size:14px" data-copy="mcp-json">Copy</button>
+            </div>
+            <pre id="mcp-json">{
+  "mcpServers": {
+    "xcautokit": {
+      "command": "npx",
+      "args": ["-y", "xcautokit@latest", "mcp"]
+    }
+  }
+}</pre>
+          </div>
+          <div class="panel" data-panel="cli">
+            <div class="copy-row">
+              <span>Global CLI</span>
+              <button class="btn btn-ghost" style="font-size:14px" data-copy="cli-cmd">Copy</button>
+            </div>
+            <pre id="cli-cmd">npm install -g xcautokit@latest
+xcautokit doctor
+xcautokit tools
+xcautokit mcp</pre>
+          </div>
+          <div class="panel" data-panel="doctor">
+            <div class="copy-row">
+              <span>Verify your Mac is ready</span>
+              <button class="btn btn-ghost" style="font-size:14px" data-copy="doctor-cmd">Copy</button>
+            </div>
+            <pre id="doctor-cmd">xcautokit doctor
+# Needs macOS, Xcode CLT, and axe on PATH for UI tools</pre>
+          </div>
+        </div>
+      </section>
+
+      <section class="wrap reveal" id="howto">
+        <div class="section-label">How it works</div>
+        <h2>Three steps to an agent that can ship UI</h2>
+        <div class="steps">
+          <div class="step">
+            <div>
+              <h3>Install the MCP server</h3>
+              <p>Drop the npx config into Cursor, Claude Code, or any MCP client. Restart the client so XCAutokit tools load.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div>
+              <h3>Point at a project</h3>
+              <p>Ask the agent to discover the Xcode project, set session defaults, and build for a booted Simulator.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div>
+              <h3>Drive and verify</h3>
+              <p>The agent taps through flows, dismisses interrupts, captures screenshots, and iterates until the UI looks right.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="wrap reveal">
+        <div class="section-label">Clients</div>
+        <h2>Works with the tools you already use</h2>
+        <div class="clients" aria-label="Supported clients">
+          <span class="client">Cursor</span>
+          <span class="client">Claude Code</span>
+          <span class="client">Codex</span>
+          <span class="client">VS Code</span>
+          <span class="client">Windsurf</span>
+          <span class="client">Any MCP client</span>
+        </div>
+      </section>
+
+      <section class="wrap faq reveal" id="faq">
+        <div class="section-label">FAQ</div>
+        <h2>Questions before you install</h2>
+        <details>
+          <summary>How is this different from XcodeBuildMCP?</summary>
+          <p>Same install shape with npx and a CLI. XCAutokit is a first party surface with interrupt handling, ticketed capture, and an optional mcpbridge backend when you are on Xcode 26.3 or newer.</p>
+        </details>
+        <details>
+          <summary>Do I need Node forever?</summary>
+          <p>Node is the distribution wrapper. The engine is a Go binary. Direct binary installs can ship the same way later.</p>
+        </details>
+        <details>
+          <summary>What if I am still on Xcode 26.2?</summary>
+          <p>XCAutokit still works. Build and test use xcodebuild. Upgrade to 26.3 or newer when you want live Issue Navigator, previews, and docs search.</p>
+        </details>
+        <details>
+          <summary>What is a ticket?</summary>
+          <p>A small handle like xca_rec_… returned by record_start or start_sim_log_cap. Pass it to the matching stop tool. That is the modern MCP state pattern.</p>
+        </details>
+        <details>
+          <summary>What dependencies do agents need?</summary>
+          <p>macOS, Xcode command line tools, and axe on PATH for UI automation. Run xcautokit doctor to verify.</p>
+        </details>
+        <details>
+          <summary>Is there a Studio app?</summary>
+          <p>Yes. XCAutokit Studio in this repo records Simulator interactions into reusable Blocks for replay. Launch it with the app script under apps/XCAutokitStudio.</p>
+        </details>
+      </section>
+
+      <section class="final wrap reveal">
+        <div class="section-label">Final step</div>
+        <h2>Install XCAutokit and let your agent touch the Simulator</h2>
+        <div class="cta-row">
+          <a class="btn btn-primary" href="#install">Get started</a>
+          <a class="btn btn-ghost" href="https://github.com/Ezra-Black/xcautokit">View on GitHub</a>
+        </div>
+        <div class="proof">
+          <span>Free · MIT · Remove one MCP entry anytime</span>
+        </div>
+      </section>
+    </main>
+
+    <footer class="wrap">
+      <div>© 2026 XCAutokit</div>
+      <div>
+        <a href="https://github.com/Ezra-Black/xcautokit">GitHub</a> ·
+        <a href="https://github.com/Ezra-Black/xcautokit/blob/main/LICENSE">License</a> ·
+        <a href="https://github.com/Ezra-Black/xcautokit/blob/main/README.md">README</a>
+      </div>
+    </footer>
+  </div>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "XCAutokit",
+    "applicationCategory": "DeveloperApplication",
+    "operatingSystem": "macOS",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+    "description": "MCP server and CLI for Xcode and iOS Simulator automation."
+  }
+  </script>
+
+  <script>
+    document.querySelectorAll('.tab').forEach((tab) => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach((t) => t.setAttribute('aria-selected', 'false'));
+        document.querySelectorAll('.panel').forEach((p) => p.classList.remove('active'));
+        tab.setAttribute('aria-selected', 'true');
+        document.querySelector(`[data-panel="${tab.dataset.tab}"]`).classList.add('active');
+      });
+    });
+
+    document.querySelectorAll('[data-copy]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const el = document.getElementById(btn.dataset.copy);
+        await navigator.clipboard.writeText(el.innerText.trim());
+        const old = btn.textContent;
+        btn.textContent = 'Copied';
+        setTimeout(() => (btn.textContent = old), 1200);
+      });
+    });
+
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((e) => { if (e.isIntersecting) e.target.classList.add('in'); });
+    }, { threshold: 0.12 });
+    document.querySelectorAll('.reveal').forEach((el) => io.observe(el));
+
+    const words = document.querySelectorAll('#tagline .w');
+    const tagIO = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        words.forEach((w, i) => setTimeout(() => w.classList.add('on'), i * 90));
+      });
+    }, { threshold: 0.4 });
+    tagIO.observe(document.getElementById('tagline'));
+  </script>
+</body>
+</html>
