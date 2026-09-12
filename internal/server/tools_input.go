@@ -71,10 +71,7 @@ type gestureIn struct {
 }
 
 func (a *App) registerInputTools(srv *mcp.Server) {
-	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "tap",
-		Description: "Tap at x,y coordinates. Blocked while a system alert/permission sheet is present — use ui_dismiss_interrupt first.",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in tapIn) (*mcp.CallToolResult, map[string]any, error) {
+	mcp.AddTool(srv, toolMeta("tap", "Tap", "Tap at x,y coordinates. Blocked while a system alert/permission sheet is present — use ui_dismiss_interrupt first.", annWrite()), func(ctx context.Context, req *mcp.CallToolRequest, in tapIn) (*mcp.CallToolResult, map[string]any, error) {
 		udid, err := a.resolveUDID(in.SimulatorUuid)
 		if err != nil {
 			return nil, nil, err
@@ -88,10 +85,7 @@ func (a *App) registerInputTools(srv *mcp.Server) {
 		return nil, map[string]any{"success": true, "x": in.X, "y": in.Y, "device": udid}, nil
 	})
 
-	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "swipe",
-		Description: "Perform swipe by coordinates (x1,y1,x2,y2) or semantic direction (up/down/left/right). Blocked while interrupt overlays are present.",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in swipeCoordIn) (*mcp.CallToolResult, map[string]any, error) {
+	mcp.AddTool(srv, toolMeta("swipe", "Swipe", "Perform swipe by coordinates (x1,y1,x2,y2) or semantic direction (up/down/left/right). Blocked while interrupt overlays are present.", annWrite()), func(ctx context.Context, req *mcp.CallToolRequest, in swipeCoordIn) (*mcp.CallToolResult, map[string]any, error) {
 		udid, err := a.resolveUDID(in.SimulatorUuid)
 		if err != nil {
 			return nil, nil, err
@@ -128,10 +122,7 @@ func (a *App) registerInputTools(srv *mcp.Server) {
 		}, nil
 	})
 
-	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "type_text",
-		Description: "Type text into focused input field. Blocked while interrupt overlays are present.",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in typeTextIn) (*mcp.CallToolResult, map[string]any, error) {
+	mcp.AddTool(srv, toolMeta("type_text", "Type Text", "Type text into focused input field. Blocked while interrupt overlays are present.", annWrite()), func(ctx context.Context, req *mcp.CallToolRequest, in typeTextIn) (*mcp.CallToolResult, map[string]any, error) {
 		if in.Text == "" {
 			return nil, nil, fmtError("text parameter required")
 		}
@@ -148,10 +139,7 @@ func (a *App) registerInputTools(srv *mcp.Server) {
 		return nil, map[string]any{"success": true, "text": in.Text, "device": udid}, nil
 	})
 
-	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "long_press",
-		Description: "Perform long press gesture on coordinates. Blocked while interrupt overlays are present.",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in longPressIn) (*mcp.CallToolResult, map[string]any, error) {
+	mcp.AddTool(srv, toolMeta("long_press", "Long Press", "Perform long press gesture on coordinates. Blocked while interrupt overlays are present.", annWrite()), func(ctx context.Context, req *mcp.CallToolRequest, in longPressIn) (*mcp.CallToolResult, map[string]any, error) {
 		udid, err := a.resolveUDID(in.SimulatorUuid)
 		if err != nil {
 			return nil, nil, err
@@ -175,10 +163,7 @@ func (a *App) registerInputTools(srv *mcp.Server) {
 		return nil, map[string]any{"success": true, "x": in.X, "y": in.Y, "duration": dur, "device": udid}, nil
 	})
 
-	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "button",
-		Description: "Press hardware button (home, lock, side-button, siri)",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in buttonIn) (*mcp.CallToolResult, map[string]any, error) {
+	mcp.AddTool(srv, toolMeta("button", "Hardware Button", "Press hardware button (home, lock, side-button, siri)", annWrite()), func(ctx context.Context, req *mcp.CallToolRequest, in buttonIn) (*mcp.CallToolResult, map[string]any, error) {
 		udid, err := a.resolveUDID(in.SimulatorUuid)
 		if err != nil {
 			return nil, nil, err
@@ -196,10 +181,7 @@ func (a *App) registerInputTools(srv *mcp.Server) {
 		return nil, map[string]any{"success": true, "buttonType": in.ButtonType, "device": udid}, nil
 	})
 
-	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "key_press",
-		Description: "Press individual keys or hardware buttons by keycode. Blocked while interrupt overlays are present.",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in keyPressIn) (*mcp.CallToolResult, map[string]any, error) {
+	mcp.AddTool(srv, toolMeta("key_press", "Key Press", "Press individual keys or hardware buttons by keycode. Blocked while interrupt overlays are present.", annWrite()), func(ctx context.Context, req *mcp.CallToolRequest, in keyPressIn) (*mcp.CallToolResult, map[string]any, error) {
 		udid, err := a.resolveUDID(in.SimulatorUuid)
 		if err != nil {
 			return nil, nil, err
@@ -222,10 +204,7 @@ func (a *App) registerInputTools(srv *mcp.Server) {
 		return nil, map[string]any{"success": true, "keyCode": code, "device": udid}, nil
 	})
 
-	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "key_sequence",
-		Description: "Press sequence of keys with optional delay. Blocked while interrupt overlays are present.",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in keySequenceIn) (*mcp.CallToolResult, map[string]any, error) {
+	mcp.AddTool(srv, toolMeta("key_sequence", "Key Sequence", "Press sequence of keys with optional delay. Blocked while interrupt overlays are present.", annWrite()), func(ctx context.Context, req *mcp.CallToolRequest, in keySequenceIn) (*mcp.CallToolResult, map[string]any, error) {
 		if len(in.Keys) == 0 {
 			return nil, nil, fmtError("keys parameter required")
 		}
@@ -250,10 +229,7 @@ func (a *App) registerInputTools(srv *mcp.Server) {
 		return nil, map[string]any{"success": true, "count": len(in.Keys), "device": udid}, nil
 	})
 
-	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "gesture",
-		Description: "Unified semantic gesture tool (tap, swipe, long_press, scroll, drag) or AXe presets. Blocked while interrupt overlays are present.",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in gestureIn) (*mcp.CallToolResult, map[string]any, error) {
+	mcp.AddTool(srv, toolMeta("gesture", "Gesture", "Unified semantic gesture tool (tap, swipe, long_press, scroll, drag) or AXe presets. Blocked while interrupt overlays are present.", annWrite()), func(ctx context.Context, req *mcp.CallToolRequest, in gestureIn) (*mcp.CallToolResult, map[string]any, error) {
 		udid, err := a.resolveUDID(in.SimulatorUuid)
 		if err != nil {
 			return nil, nil, err

@@ -33,15 +33,30 @@ func (a *App) Server() *mcp.Server {
 	}, &mcp.ServerOptions{
 		Instructions: AgentInstructions,
 	})
+	wf := workflowsFromEnv()
 	a.registerResources(srv)
 	a.registerPrompts(srv)
-	a.registerDeviceTools(srv)
-	a.registerInputTools(srv)
-	a.registerUITools(srv)
-	a.registerAppTools(srv)
-	a.registerCaptureTools(srv)
-	a.registerProjectTools(srv)
-	a.registerXcodeTools(srv)
+	if wf.enabled("device") {
+		a.registerDeviceTools(srv)
+	}
+	if wf.enabled("input") {
+		a.registerInputTools(srv)
+	}
+	if wf.enabled("ui") {
+		a.registerUITools(srv)
+	}
+	if wf.enabled("app") {
+		a.registerAppTools(srv)
+	}
+	if wf.enabled("capture") {
+		a.registerCaptureTools(srv)
+	}
+	if wf.enabled("project") || wf.enabled("build") || wf.enabled("session") {
+		a.registerProjectTools(srv)
+	}
+	if wf.enabled("xcode") {
+		a.registerXcodeTools(srv)
+	}
 	return srv
 }
 

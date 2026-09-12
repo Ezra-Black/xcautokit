@@ -16,7 +16,13 @@ async function main() {
   }
 
   if (!fs.existsSync(bin)) {
-    console.error(`xcautokit binary missing at ${bin}. Run: npm run build:go`);
+    console.error(
+      `xcautokit binary missing at ${bin}.\n` +
+        `Fix:\n` +
+        `  1) From a checkout: npm run build:go\n` +
+        `  2) Or install Go 1.25+ and re-run npm install (postinstall builds)\n` +
+        `  3) Or use a release that includes dist/xcautokit-darwin-*`
+    );
     process.exit(1);
   }
 

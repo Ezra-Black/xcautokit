@@ -22,10 +22,7 @@ type deviceShutdownIn struct {
 }
 
 func (a *App) registerDeviceTools(srv *mcp.Server) {
-	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "status",
-		Description: "Get current simulator status (active UUID, boot status, device type, OS version)",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in statusIn) (*mcp.CallToolResult, map[string]any, error) {
+	mcp.AddTool(srv, toolMeta("status", "Status", "Get current simulator status (active UUID, boot status, device type, OS version)", annRO()), func(ctx context.Context, req *mcp.CallToolRequest, in statusIn) (*mcp.CallToolResult, map[string]any, error) {
 		st, err := sim.GetStatus()
 		if err != nil {
 			return nil, nil, err
@@ -45,10 +42,7 @@ func (a *App) registerDeviceTools(srv *mcp.Server) {
 		return nil, out, nil
 	})
 
-	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "device_list",
-		Description: "List all available iOS Simulator devices",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in emptyIn) (*mcp.CallToolResult, map[string]any, error) {
+	mcp.AddTool(srv, toolMeta("device_list", "Device List", "List all available iOS Simulator devices", annRO()), func(ctx context.Context, req *mcp.CallToolRequest, in emptyIn) (*mcp.CallToolResult, map[string]any, error) {
 		devices, err := sim.ListDevices()
 		if err != nil {
 			return nil, nil, err
@@ -56,10 +50,7 @@ func (a *App) registerDeviceTools(srv *mcp.Server) {
 		return nil, map[string]any{"count": len(devices), "devices": devices}, nil
 	})
 
-	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "device_boot",
-		Description: "Boot a simulator device by UDID or name",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in deviceBootIn) (*mcp.CallToolResult, map[string]any, error) {
+	mcp.AddTool(srv, toolMeta("device_boot", "Boot Device", "Boot a simulator device by UDID or name", annWrite()), func(ctx context.Context, req *mcp.CallToolRequest, in deviceBootIn) (*mcp.CallToolResult, map[string]any, error) {
 		if in.UDID == "" {
 			return nil, nil, fmtError("udid parameter required")
 		}
@@ -74,10 +65,7 @@ func (a *App) registerDeviceTools(srv *mcp.Server) {
 		return nil, map[string]any{"success": true, "udid": udid}, nil
 	})
 
-	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "device_shutdown",
-		Description: "Shutdown a running simulator device",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in deviceShutdownIn) (*mcp.CallToolResult, map[string]any, error) {
+	mcp.AddTool(srv, toolMeta("device_shutdown", "Shutdown Device", "Shutdown a running simulator device", annDestructive()), func(ctx context.Context, req *mcp.CallToolRequest, in deviceShutdownIn) (*mcp.CallToolResult, map[string]any, error) {
 		udid := in.UDID
 		if udid == "" {
 			udid = "booted"
@@ -88,10 +76,7 @@ func (a *App) registerDeviceTools(srv *mcp.Server) {
 		return nil, map[string]any{"success": true, "udid": udid}, nil
 	})
 
-	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "open_sim",
-		Description: "Bring iOS Simulator app to foreground",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in emptyIn) (*mcp.CallToolResult, map[string]any, error) {
+	mcp.AddTool(srv, toolMeta("open_sim", "Open Simulator", "Bring iOS Simulator app to foreground", annWrite()), func(ctx context.Context, req *mcp.CallToolRequest, in emptyIn) (*mcp.CallToolResult, map[string]any, error) {
 		if err := sim.OpenSimulator(); err != nil {
 			return nil, nil, err
 		}

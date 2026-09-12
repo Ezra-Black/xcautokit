@@ -39,7 +39,7 @@ func (a *App) registerResources(srv *mcp.Server) {
 	srv.AddResource(&mcp.Resource{
 		URI:         "simulator://config",
 		Name:        "Server Configuration",
-		Description: "Current autokit configuration",
+		Description: "Current XCAutokit configuration and session defaults",
 		MIMEType:    "application/json",
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		return textResource(req.Params.URI, map[string]any{
@@ -110,8 +110,16 @@ const agentGuideExtra = `## Tool routing (short)
 | Interrupts | ui_check_interrupt, ui_dismiss_interrupt |
 | UI inspect | ui_summary, ui_describe, ui_find |
 | UI input | gesture, tap, swipe, type_text (blocked while interrupt present) |
-| Capture | screenshot, record_start/stop (ticket) |
+| Capture | screenshot, record_start/stop (process-local ticket) |
 | Build | build_sim, build_run_sim, test_sim |
+
+## Tickets
+
+Tickets are process-local handles. Pass them back to the matching stop tool. After an MCP restart, start a new capture.
+
+## Workflow filter
+
+Optional env XCAUTOKIT_WORKFLOWS=core or device,ui,input,build to reduce tools exposed to the model.
 `
 
 func textResource(uri string, v any) *mcp.ReadResourceResult {

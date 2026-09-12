@@ -12,13 +12,13 @@ func (a *App) registerPrompts(srv *mcp.Server) {
 		Description: "Build the iOS project, inspect issues, then verify UI on simulator",
 	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 		return &mcp.GetPromptResult{
-			Description: "Autokit build → diagnose → UI verify loop",
+			Description: "XCAutokit build → diagnose → UI verify loop",
 			Messages: []*mcp.PromptMessage{
-				{Role: "user", Content: &mcp.TextContent{Text: `Use Autokit only (no competitor Xcode MCPs).
+				{Role: "user", Content: &mcp.TextContent{Text: `Use XCAutokit only (no competitor Xcode MCPs).
 
 1. Read resource xcode://status. If mcpbridge is available, call xcode_windows and store tabIdentifier via session_set_defaults.
 2. session_show_defaults — if project/scheme missing, discover_projects then session_set_defaults.
-3. build_sim — Autokit routes to mcpbridge when available, else xcodebuild.
+3. build_sim — XCAutokit routes to mcpbridge when available, else xcodebuild.
 4. On failure: xcode_issues or xcode_build_log (bridge) / inspect build_sim output (fallback).
 5. Fix code in the editor, rebuild.
 6. build_run_sim or app_launch, then ui_check_interrupt. If blocked, ui_dismiss_interrupt with an explicit action (accept/decline/dismiss) — never silently auto-accept permissions. Then ui_summary / screenshot to verify.`}},
@@ -31,9 +31,9 @@ func (a *App) registerPrompts(srv *mcp.Server) {
 		Description: "Explore and interact with the booted simulator UI",
 	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 		return &mcp.GetPromptResult{
-			Description: "Simulator UI exploration with Autokit",
+			Description: "Simulator UI exploration with XCAutokit",
 			Messages: []*mcp.PromptMessage{
-				{Role: "user", Content: &mcp.TextContent{Text: `Use Autokit / XCAutokit simulator tools:
+				{Role: "user", Content: &mcp.TextContent{Text: `Use XCAutokit simulator tools:
 
 1. status — confirm a booted simulator (device_boot / open_sim if needed).
 2. After app_launch or navigation: ui_check_interrupt. If hasInterrupt, call ui_dismiss_interrupt with an explicit action (accept|decline|dismiss|button). Never invent Allow taps; never auto-accept ATT/location/camera without choosing intentionally. SpringBoard → button home + app_launch.
@@ -47,12 +47,12 @@ func (a *App) registerPrompts(srv *mcp.Server) {
 
 	srv.AddPrompt(&mcp.Prompt{
 		Name:        "fix-failing-test",
-		Description: "Run tests and iterate on failures using Autokit + Xcode backend",
+		Description: "Run tests and iterate on failures using XCAutokit + Xcode backend",
 	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 		return &mcp.GetPromptResult{
 			Description: "Test-fix loop",
 			Messages: []*mcp.PromptMessage{
-				{Role: "user", Content: &mcp.TextContent{Text: `Use Autokit:
+				{Role: "user", Content: &mcp.TextContent{Text: `Use XCAutokit:
 
 1. Ensure session defaults (project/scheme) and xcode_windows if bridge is up.
 2. test_sim for the full suite, or run_some_tests for specific identifiers when mcpbridge is available.

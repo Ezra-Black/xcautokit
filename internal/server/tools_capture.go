@@ -25,7 +25,7 @@ type recordStartIn struct {
 }
 
 type recordStopIn struct {
-	Ticket        string `json:"ticket,omitempty" jsonschema:"Ticket from record_start (preferred; MCP ticket handle)"`
+	Ticket        string `json:"ticket,omitempty" jsonschema:"Process-local ticket from record_start"`
 	SimulatorUuid string `json:"simulatorUuid,omitempty"`
 }
 
@@ -42,10 +42,7 @@ type logStopIn struct {
 }
 
 func (a *App) registerCaptureTools(srv *mcp.Server) {
-	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "screenshot",
-		Description: "Capture screenshot and return path",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in screenshotIn) (*mcp.CallToolResult, map[string]any, error) {
+	mcp.AddTool(srv, toolMeta("screenshot", "Screenshot", "Capture screenshot and return path", annRO()), func(ctx context.Context, req *mcp.CallToolRequest, in screenshotIn) (*mcp.CallToolResult, map[string]any, error) {
 		udid, err := a.resolveUDID(in.SimulatorUuid)
 		if err != nil {
 			return nil, nil, err
@@ -63,10 +60,7 @@ func (a *App) registerCaptureTools(srv *mcp.Server) {
 		return nil, map[string]any{"success": true, "path": path, "device": udid}, nil
 	})
 
-	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "record_start",
-		Description: "Start video recording. Returns a ticket handle to pass to record_stop (stateless-friendly).",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in recordStartIn) (*mcp.CallToolResult, map[string]any, error) {
+	mcp.AddTool(srv, toolMeta("record_start", "Start Recording", "Start video recording. Returns a process-local ticket for record_stop (invalid after MCP restart).", annWrite()), func(ctx context.Context, req *mcp.CallToolRequest, in recordStartIn) (*mcp.CallToolResult, map[string]any, error) {
 		udid, err := a.resolveUDID(in.SimulatorUuid)
 		if err != nil {
 			return nil, nil, err
@@ -96,14 +90,11 @@ func (a *App) registerCaptureTools(srv *mcp.Server) {
 			"path":    path,
 			"pid":     cmd.Process.Pid,
 			"device":  udid,
-			"message": "Pass ticket to record_stop",
+			"message": "Pass ticket to record_stop (process-local; restart invalidates it)",
 		}, nil
 	})
 
-	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "record_stop",
-		Description: "Stop video recording using the ticket from record_start",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in recordStopIn) (*mcp.CallToolResult, map[string]any, error) {
+	mcp.AddTool(srv, toolMeta("record_stop", "Stop Recording", "Stop video recording using the ticket from record_start", annWrite()), func(ctx context.Context, req *mcp.CallToolRequest, in recordStopIn) (*mcp.CallToolResult, map[string]any, error) {
 		var rec *ticket.Record
 		var err error
 		if in.Ticket != "" {
@@ -134,10 +125,7 @@ func (a *App) registerCaptureTools(srv *mcp.Server) {
 		}, nil
 	})
 
-	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "start_sim_log_cap",
-		Description: "Start capturing simulator logs. Returns a ticket handle for stop_sim_log_cap.",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in logStartIn) (*mcp.CallToolResult, map[string]any, error) {
+	mcp.AddTool(srv, toolMeta("start_sim_log_cap", "Start Log Capture", "Start capturing simulator logs. Returns a process-local ticket for stop_sim_log_cap.", annWrite()), func(ctx context.Context, req *mcp.CallToolRequest, in logStartIn) (*mcp.CallToolResult, map[string]any, error) {
 		udid, err := a.resolveUDID(in.SimulatorUuid)
 		if err != nil {
 			return nil, nil, err
@@ -175,14 +163,11 @@ func (a *App) registerCaptureTools(srv *mcp.Server) {
 			"path":       path,
 			"capturePid": cmd.Process.Pid,
 			"device":     udid,
-			"message":    "Pass ticket to stop_sim_log_cap",
+			"message":    "Pass ticket to stop_sim_log_cap (process-local; restart invalidates it)",
 		}, nil
 	})
 
-	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "stop_sim_log_cap",
-		Description: "Stop simulator log capture using ticket (preferred) or capturePid",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in logStopIn) (*mcp.CallToolResult, map[string]any, error) {
+	mcp.AddTool(srv, toolMeta("stop_sim_log_cap", "Stop Log Capture", "Stop simulator log capture using ticket (preferred) or capturePid", annWrite()), func(ctx context.Context, req *mcp.CallToolRequest, in logStopIn) (*mcp.CallToolResult, map[string]any, error) {
 		stopped := 0
 		if in.Ticket != "" {
 			rec, err := a.Tickets.Take(in.Ticket)

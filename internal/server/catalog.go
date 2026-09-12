@@ -7,7 +7,7 @@ type ToolInfo struct {
 }
 
 func ToolCatalog() []ToolInfo {
-	return []ToolInfo{
+	all := []ToolInfo{
 		{Name: "status", Category: "device", Description: "Simulator status"},
 		{Name: "device_list", Category: "device", Description: "List simulators"},
 		{Name: "device_boot", Category: "device", Description: "Boot simulator"},
@@ -29,9 +29,9 @@ func ToolCatalog() []ToolInfo {
 		{Name: "ui_check_interrupt", Category: "ui", Description: "Detect alerts/sheets/permissions/banners"},
 		{Name: "ui_dismiss_interrupt", Category: "ui", Description: "Dismiss interrupt with explicit action"},
 		{Name: "screenshot", Category: "capture", Description: "Capture screenshot"},
-		{Name: "record_start", Category: "capture", Description: "Start recording (returns ticket)"},
+		{Name: "record_start", Category: "capture", Description: "Start recording (process-local ticket)"},
 		{Name: "record_stop", Category: "capture", Description: "Stop recording by ticket"},
-		{Name: "start_sim_log_cap", Category: "capture", Description: "Start log capture (returns ticket)"},
+		{Name: "start_sim_log_cap", Category: "capture", Description: "Start log capture (process-local ticket)"},
 		{Name: "stop_sim_log_cap", Category: "capture", Description: "Stop log capture by ticket"},
 		{Name: "app_install", Category: "app", Description: "Install .app"},
 		{Name: "app_launch", Category: "app", Description: "Launch by bundle ID"},
@@ -58,4 +58,15 @@ func ToolCatalog() []ToolInfo {
 		{Name: "swift_snippet", Category: "xcode", Description: "Execute Swift snippet"},
 		{Name: "run_some_tests", Category: "xcode", Description: "Run selected tests"},
 	}
+	wf := workflowsFromEnv()
+	if wf["all"] {
+		return all
+	}
+	var out []ToolInfo
+	for _, t := range all {
+		if wf.enabled(t.Category) {
+			out = append(out, t)
+		}
+	}
+	return out
 }

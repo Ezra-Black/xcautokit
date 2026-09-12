@@ -22,14 +22,20 @@ Local checkout:
 3. For live Xcode IDE tools:
    - Install **Xcode 26.3+**
    - Open your project/workspace in Xcode
-   - **Xcode → Settings → Intelligence → Model Context Protocol** → enable **Allow external agents to use Xcode tools**
-4. Optional env: `XCAUTOKIT_XCODE_BACKEND=auto|on|off`, `MCP_XCODE_PID`
+   - **Xcode → Settings → Intelligence → Allow external agents to use Xcode tools**
+4. Optional env:
+   - `XCAUTOKIT_XCODE_BACKEND=auto|on|off`
+   - `MCP_XCODE_PID`
+   - `XCAUTOKIT_WORKFLOWS=core` (or `device,ui,input,build,…`) to shrink the tool list
+   - `XCAUTOKIT_INTERRUPT_GUARD=off` to disable input blocking on alerts
 
 XCAutokit uses `xcrun mcpbridge` **internally** when available.
 
-## Tickets (modern MCP)
+## Tickets (process-local)
 
 `record_start` and `start_sim_log_cap` return a `ticket`. Pass that ticket to `record_stop` / `stop_sim_log_cap`.
+
+Tickets are **process-local**. If the MCP process restarts, they become invalid — start a new capture. Prefer tickets over sticky session state for long-lived ops; use `session_set_defaults` only for project/scheme/udid convenience.
 
 ## Tool routing
 
@@ -50,7 +56,7 @@ Customers get this without Cursor rules:
 - **Initialize `instructions`** — every MCP client receives the interrupt workflow on connect
 - **Resource** `xcautokit://agent-guide` and live `simulator://interrupts`
 - **Auto-attach** — `app_launch` / `open_url` / `build_run_sim` / `launch_app_logs_sim` include `hasInterrupt` + `interrupts`
-- **Input guard** — `tap` / `swipe` / `type_text` / `gesture` / keys refuse while a blocking overlay is present (disable with `XCAUTOKIT_INTERRUPT_GUARD=off`)
+- **Input guard** — `tap` / `swipe` / `type_text` / `gesture` / keys refuse while a blocking overlay is present
 
 Workflow:
 
@@ -64,10 +70,13 @@ Workflow:
 - `build-and-verify`
 - `ui-explore`
 - `fix-failing-test`
+- `handle-interrupt`
 
 ## Resources
 
 - `simulator://status`
 - `simulator://devices`
 - `simulator://config`
+- `simulator://interrupts`
 - `xcode://status`
+- `xcautokit://agent-guide`

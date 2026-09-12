@@ -50,10 +50,7 @@ type launchLogsIn struct {
 }
 
 func (a *App) registerProjectTools(srv *mcp.Server) {
-	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "discover_projects",
-		Description: "Find .xcodeproj and .xcworkspace files recursively",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in discoverIn) (*mcp.CallToolResult, map[string]any, error) {
+	mcp.AddTool(srv, toolMeta("discover_projects", "Discover Projects", "Find .xcodeproj and .xcworkspace files recursively", annRO()), func(ctx context.Context, req *mcp.CallToolRequest, in discoverIn) (*mcp.CallToolResult, map[string]any, error) {
 		found, err := xcodebuild.DiscoverProjects(in.Root)
 		if err != nil {
 			return nil, nil, err
@@ -61,10 +58,7 @@ func (a *App) registerProjectTools(srv *mcp.Server) {
 		return nil, map[string]any{"count": len(found), "projects": found}, nil
 	})
 
-	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "list_schemes",
-		Description: "List available build schemes for project",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in projectIn) (*mcp.CallToolResult, map[string]any, error) {
+	mcp.AddTool(srv, toolMeta("list_schemes", "List Schemes", "List available build schemes for project", annRO()), func(ctx context.Context, req *mcp.CallToolRequest, in projectIn) (*mcp.CallToolResult, map[string]any, error) {
 		project := in.Project
 		if project == "" {
 			project = a.Session.Get().ProjectPath
@@ -79,10 +73,7 @@ func (a *App) registerProjectTools(srv *mcp.Server) {
 		return nil, map[string]any{"output": out, "project": project, "backend": "xcodebuild"}, nil
 	})
 
-	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "show_build_settings",
-		Description: "Show build settings for project/scheme",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in projectIn) (*mcp.CallToolResult, map[string]any, error) {
+	mcp.AddTool(srv, toolMeta("show_build_settings", "Show Build Settings", "Show build settings for project/scheme", annRO()), func(ctx context.Context, req *mcp.CallToolRequest, in projectIn) (*mcp.CallToolResult, map[string]any, error) {
 		project, scheme, cfg, _, d, err := a.projectOpts(in.Project, in.Scheme, in.Configuration, in.Destination)
 		if err != nil {
 			return nil, nil, err
@@ -96,10 +87,7 @@ func (a *App) registerProjectTools(srv *mcp.Server) {
 		return nil, map[string]any{"output": out, "project": project, "scheme": scheme}, nil
 	})
 
-	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "get_app_bundle_id",
-		Description: "Extract app bundle ID from project build settings",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in projectIn) (*mcp.CallToolResult, map[string]any, error) {
+	mcp.AddTool(srv, toolMeta("get_app_bundle_id", "Get App Bundle ID", "Extract app bundle ID from project build settings", annRO()), func(ctx context.Context, req *mcp.CallToolRequest, in projectIn) (*mcp.CallToolResult, map[string]any, error) {
 		project, scheme, cfg, _, d, err := a.projectOpts(in.Project, in.Scheme, in.Configuration, in.Destination)
 		if err != nil {
 			return nil, nil, err
@@ -113,10 +101,7 @@ func (a *App) registerProjectTools(srv *mcp.Server) {
 		return nil, map[string]any{"bundleId": id, "project": project, "scheme": scheme}, nil
 	})
 
-	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "get_sim_app_path",
-		Description: "Get installed app path on simulator",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in getSimAppPathIn) (*mcp.CallToolResult, map[string]any, error) {
+	mcp.AddTool(srv, toolMeta("get_sim_app_path", "Get Simulator App Path", "Get installed app path on simulator", annRO()), func(ctx context.Context, req *mcp.CallToolRequest, in getSimAppPathIn) (*mcp.CallToolResult, map[string]any, error) {
 		if in.BundleId == "" {
 			return nil, nil, fmtError("bundleId parameter required")
 		}
@@ -131,10 +116,7 @@ func (a *App) registerProjectTools(srv *mcp.Server) {
 		return nil, map[string]any{"path": strings.TrimSpace(string(out)), "bundleId": in.BundleId, "device": udid}, nil
 	})
 
-	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "session_set_defaults",
-		Description: "Set session defaults for project, scheme, simulator, etc.",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in sessionSetIn) (*mcp.CallToolResult, map[string]any, error) {
+	mcp.AddTool(srv, toolMeta("session_set_defaults", "Set Session Defaults", "Set session defaults for project, scheme, simulator, etc.", annWrite()), func(ctx context.Context, req *mcp.CallToolRequest, in sessionSetIn) (*mcp.CallToolResult, map[string]any, error) {
 		cur, err := a.Session.Set(session.Defaults{
 			ProjectPath: in.ProjectPath, Scheme: in.Scheme, Configuration: in.Configuration,
 			SimulatorUdid: in.SimulatorUdid, SimulatorName: in.SimulatorName,
@@ -146,17 +128,11 @@ func (a *App) registerProjectTools(srv *mcp.Server) {
 		return nil, map[string]any{"success": true, "defaults": cur}, nil
 	})
 
-	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "session_show_defaults",
-		Description: "Show current session defaults",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in emptyIn) (*mcp.CallToolResult, map[string]any, error) {
+	mcp.AddTool(srv, toolMeta("session_show_defaults", "Show Session Defaults", "Show current session defaults", annRO()), func(ctx context.Context, req *mcp.CallToolRequest, in emptyIn) (*mcp.CallToolResult, map[string]any, error) {
 		return nil, map[string]any{"defaults": a.Session.Get()}, nil
 	})
 
-	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "session_clear_defaults",
-		Description: "Clear session defaults (all or specific keys)",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in sessionClearIn) (*mcp.CallToolResult, map[string]any, error) {
+	mcp.AddTool(srv, toolMeta("session_clear_defaults", "Clear Session Defaults", "Clear session defaults (all or specific keys)", annDestructive()), func(ctx context.Context, req *mcp.CallToolRequest, in sessionClearIn) (*mcp.CallToolResult, map[string]any, error) {
 		cur, n, err := a.Session.Clear(in.Keys)
 		if err != nil {
 			return nil, nil, err
@@ -164,25 +140,13 @@ func (a *App) registerProjectTools(srv *mcp.Server) {
 		return nil, map[string]any{"success": true, "cleared": n, "defaults": cur}, nil
 	})
 
-	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "build_sim",
-		Description: "Build project for iOS Simulator (uses Xcode mcpbridge when available, else xcodebuild)",
-	}, a.handleBuildSim)
+	mcp.AddTool(srv, toolMeta("build_sim", "Build Simulator", "Build project for iOS Simulator (uses Xcode mcpbridge when available, else xcodebuild)", annWrite()), a.handleBuildSim)
 
-	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "build_run_sim",
-		Description: "Build and run project on iOS Simulator",
-	}, a.handleBuildRunSim)
+	mcp.AddTool(srv, toolMeta("build_run_sim", "Build and Run Simulator", "Build and run project on iOS Simulator", annWrite()), a.handleBuildRunSim)
 
-	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "test_sim",
-		Description: "Run tests for project on iOS Simulator (uses Xcode mcpbridge when available, else xcodebuild)",
-	}, a.handleTestSim)
+	mcp.AddTool(srv, toolMeta("test_sim", "Test Simulator", "Run tests for project on iOS Simulator (uses Xcode mcpbridge when available, else xcodebuild)", annWrite()), a.handleTestSim)
 
-	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "clean",
-		Description: "Clean build artifacts for project",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in projectIn) (*mcp.CallToolResult, map[string]any, error) {
+	mcp.AddTool(srv, toolMeta("clean", "Clean", "Clean build artifacts for project", annDestructive()), func(ctx context.Context, req *mcp.CallToolRequest, in projectIn) (*mcp.CallToolResult, map[string]any, error) {
 		project, scheme, cfg, _, d, err := a.projectOpts(in.Project, in.Scheme, in.Configuration, in.Destination)
 		if err != nil {
 			return nil, nil, err
@@ -196,10 +160,7 @@ func (a *App) registerProjectTools(srv *mcp.Server) {
 		return nil, map[string]any{"success": true, "output": trimOut(out), "backend": "xcodebuild"}, nil
 	})
 
-	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "launch_app_logs_sim",
-		Description: "Launch app on simulator with streaming logs",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in launchLogsIn) (*mcp.CallToolResult, map[string]any, error) {
+	mcp.AddTool(srv, toolMeta("launch_app_logs_sim", "Launch App with Logs", "Launch app on simulator with streaming logs", annWrite()), func(ctx context.Context, req *mcp.CallToolRequest, in launchLogsIn) (*mcp.CallToolResult, map[string]any, error) {
 		bundleID := in.BundleId
 		if bundleID == "" {
 			project, scheme, cfg, _, d, err := a.projectOpts(in.Project, in.Scheme, "", "")

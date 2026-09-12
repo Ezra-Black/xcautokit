@@ -866,7 +866,7 @@ xcautokit mcp</pre>
         </details>
         <details>
           <summary>What is a ticket?</summary>
-          <p>A small handle like xca_rec_… returned by record_start or start_sim_log_cap. Pass it to the matching stop tool. That is the modern MCP state pattern.</p>
+          <p>A small handle like xca_rec_… returned by record_start or start_sim_log_cap. Pass it to the matching stop tool. Tickets are process local: if the MCP server restarts, start a new capture.</p>
         </details>
         <details>
           <summary>What dependencies do agents need?</summary>

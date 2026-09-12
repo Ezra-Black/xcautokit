@@ -26,9 +26,18 @@ If kind is springboard: button home → app_launch → ui_check_interrupt again.
 
 Input tools (tap/swipe/type/gesture/…) refuse to run while a blocking interrupt (alert/sheet/permission/banner) is present; dismiss first.
 
-## Tickets
+## Tickets (process-local)
 
-record_start / start_sim_log_cap return a ticket — pass it to the matching stop tool.
+record_start / start_sim_log_cap return a ticket string. Pass it to record_stop / stop_sim_log_cap.
+Tickets live only in this MCP process — if the server restarts, start a new capture.
+
+## Session defaults
+
+session_set_defaults stores project/scheme/udid under ~/.xcautokit for convenience across tool calls. Prefer explicit args when unsure.
+
+## Optional tool filtering
+
+Set XCAUTOKIT_WORKFLOWS=core to omit live Xcode tools, or a comma list such as device,ui,input,build.
 `
 
 func (a *App) checkInterrupts(udid string) (has bool, interrupts []sim.Interrupt) {

@@ -72,6 +72,8 @@ Or after global install:
 
 Env:
   XCAUTOKIT_XCODE_BACKEND=auto|on|off
+  XCAUTOKIT_WORKFLOWS=all|core|device,ui,input,build,...
+  XCAUTOKIT_INTERRUPT_GUARD=off
   MCP_XCODE_PID=<pid>
 `)
 	return nil
@@ -231,7 +233,7 @@ Or: ` + "`npm i -g xcautokit && xcautokit mcp`" + `
 2. Prefer ` + "`build_sim` / `test_sim`" + ` (mcpbridge when Xcode 26.3+, else xcodebuild)
 3. After launch: read ` + "`hasInterrupt`" + ` on the launch result (auto-attached), or call ` + "`ui_check_interrupt`" + `. If blocked, ` + "`ui_dismiss_interrupt`" + ` with explicit action. Never silently auto-accept permissions.
 4. Verify with ` + "`ui_summary`" + `, ` + "`screenshot`" + `, ` + "`gesture`" + ` (input tools refuse while overlays block)
-5. Stateful ops return a **ticket** — pass it back on stop/follow-up calls
+5. Capture ops return a **process-local ticket** — pass it back on stop; MCP restart invalidates it
 
 ## Interrupts (built into MCP)
 

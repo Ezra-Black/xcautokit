@@ -23,10 +23,7 @@ type openURLIn struct {
 }
 
 func (a *App) registerAppTools(srv *mcp.Server) {
-	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "app_install",
-		Description: "Install .app bundle",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in appInstallIn) (*mcp.CallToolResult, map[string]any, error) {
+	mcp.AddTool(srv, toolMeta("app_install", "Install App", "Install .app bundle", annWrite()), func(ctx context.Context, req *mcp.CallToolRequest, in appInstallIn) (*mcp.CallToolResult, map[string]any, error) {
 		if in.AppPath == "" {
 			return nil, nil, fmtError("appPath parameter required")
 		}
@@ -40,10 +37,7 @@ func (a *App) registerAppTools(srv *mcp.Server) {
 		return nil, map[string]any{"success": true, "appPath": in.AppPath, "device": udid}, nil
 	})
 
-	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "app_launch",
-		Description: "Launch app by bundle ID. Response includes hasInterrupt/interrupts — dismiss overlays before UI input.",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in appBundleIn) (*mcp.CallToolResult, map[string]any, error) {
+	mcp.AddTool(srv, toolMeta("app_launch", "Launch App", "Launch app by bundle ID. Response includes hasInterrupt/interrupts — dismiss overlays before UI input.", annWrite()), func(ctx context.Context, req *mcp.CallToolRequest, in appBundleIn) (*mcp.CallToolResult, map[string]any, error) {
 		if in.BundleId == "" {
 			return nil, nil, fmtError("bundleId parameter required")
 		}
@@ -59,10 +53,7 @@ func (a *App) registerAppTools(srv *mcp.Server) {
 		return nil, out, nil
 	})
 
-	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "app_terminate",
-		Description: "Terminate running app",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in appBundleIn) (*mcp.CallToolResult, map[string]any, error) {
+	mcp.AddTool(srv, toolMeta("app_terminate", "Terminate App", "Terminate running app", annDestructive()), func(ctx context.Context, req *mcp.CallToolRequest, in appBundleIn) (*mcp.CallToolResult, map[string]any, error) {
 		if in.BundleId == "" {
 			return nil, nil, fmtError("bundleId parameter required")
 		}
@@ -76,10 +67,7 @@ func (a *App) registerAppTools(srv *mcp.Server) {
 		return nil, map[string]any{"success": true, "bundleId": in.BundleId, "device": udid}, nil
 	})
 
-	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "open_url",
-		Description: "Open URL scheme. Response includes hasInterrupt/interrupts when system dialogs appear.",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in openURLIn) (*mcp.CallToolResult, map[string]any, error) {
+	mcp.AddTool(srv, toolMeta("open_url", "Open URL", "Open URL scheme. Response includes hasInterrupt/interrupts when system dialogs appear.", annWrite()), func(ctx context.Context, req *mcp.CallToolRequest, in openURLIn) (*mcp.CallToolResult, map[string]any, error) {
 		if in.URL == "" {
 			return nil, nil, fmtError("url parameter required")
 		}

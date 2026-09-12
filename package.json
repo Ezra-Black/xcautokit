@@ -1,6 +1,6 @@
 {
   "name": "xcautokit",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "XCAutokit — first-party MCP server and CLI for Xcode + iOS Simulator automation",
   "keywords": [
     "mcp",
@@ -8,8 +8,7 @@
     "xcode",
     "ios",
     "simulator",
-    "xcautokit",
-    "autokit"
+    "xcautokit"
   ],
   "license": "MIT",
   "author": "XCAutokit",
@@ -24,11 +23,16 @@
   "os": [
     "darwin"
   ],
+  "cpu": [
+    "arm64",
+    "x64"
+  ],
   "bin": {
     "xcautokit": "npm/bin/xcautokit.js"
   },
   "files": [
     "npm/",
+    "dist/",
     "internal/",
     "main.go",
     "go.mod",

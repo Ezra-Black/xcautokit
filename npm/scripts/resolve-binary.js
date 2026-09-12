@@ -16,12 +16,16 @@ function platformKey() {
 }
 
 function resolveBinary() {
+  // Package root is two levels up from npm/scripts
   const root = path.resolve(__dirname, '../..');
   const key = platformKey();
+  const name = `xcautokit-${key}`;
   const candidates = [
-    path.join(root, 'dist', `xcautokit-${key}`),
+    path.join(root, 'dist', name),
+    path.join(root, 'npm', 'dist', name),
     path.join(root, 'xcautokit'),
-    path.join(root, 'npm', 'dist', `xcautokit-${key}`),
+    // Legacy Autokit build name
+    path.join(root, 'dist', `autokit-${key}`),
   ];
   for (const c of candidates) {
     if (fs.existsSync(c)) return c;

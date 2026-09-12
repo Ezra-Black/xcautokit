@@ -39,10 +39,7 @@ type uiDismissInterruptIn struct {
 }
 
 func (a *App) registerUITools(srv *mcp.Server) {
-	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "ui_describe",
-		Description: "Full accessibility tree as JSON with frames/bounds and identifiers",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in simOnlyIn) (*mcp.CallToolResult, map[string]any, error) {
+	mcp.AddTool(srv, toolMeta("ui_describe", "Describe UI", "Full accessibility tree as JSON with frames/bounds and identifiers", annRO()), func(ctx context.Context, req *mcp.CallToolRequest, in simOnlyIn) (*mcp.CallToolResult, map[string]any, error) {
 		udid, err := a.resolveUDID(in.SimulatorUuid)
 		if err != nil {
 			return nil, nil, err
@@ -58,10 +55,7 @@ func (a *App) registerUITools(srv *mcp.Server) {
 		return nil, map[string]any{"elements": els, "device": udid}, nil
 	})
 
-	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "ui_find",
-		Description: "Find elements by selector (accessibilityId, label, text, value, hint, predicate, role). Returns ranked matches with frames and identifiers.",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in uiFindIn) (*mcp.CallToolResult, map[string]any, error) {
+	mcp.AddTool(srv, toolMeta("ui_find", "Find UI Element", "Find elements by selector (accessibilityId, label, text, value, hint, predicate, role). Returns ranked matches with frames and identifiers.", annRO()), func(ctx context.Context, req *mcp.CallToolRequest, in uiFindIn) (*mcp.CallToolResult, map[string]any, error) {
 		if in.By == "" || in.Query == "" {
 			return nil, nil, fmtError("by and query parameters required")
 		}
@@ -88,10 +82,7 @@ func (a *App) registerUITools(srv *mcp.Server) {
 		return nil, out, nil
 	})
 
-	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "ui_search",
-		Description: "Grep-like text search in UI hierarchy",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in uiSearchIn) (*mcp.CallToolResult, map[string]any, error) {
+	mcp.AddTool(srv, toolMeta("ui_search", "Search UI", "Grep-like text search in UI hierarchy", annRO()), func(ctx context.Context, req *mcp.CallToolRequest, in uiSearchIn) (*mcp.CallToolResult, map[string]any, error) {
 		if in.Query == "" {
 			return nil, nil, fmtError("query parameter required")
 		}
@@ -111,10 +102,7 @@ func (a *App) registerUITools(srv *mcp.Server) {
 		return nil, map[string]any{"count": len(matches), "matches": matches, "device": udid}, nil
 	})
 
-	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "ui_summary",
-		Description: "LLM-optimized compact summary of the visible UI. Includes interrupts preview (alerts/sheets/permissions) when present.",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in simOnlyIn) (*mcp.CallToolResult, map[string]any, error) {
+	mcp.AddTool(srv, toolMeta("ui_summary", "UI Summary", "LLM-optimized compact summary of the visible UI. Includes interrupts preview (alerts/sheets/permissions) when present.", annRO()), func(ctx context.Context, req *mcp.CallToolRequest, in simOnlyIn) (*mcp.CallToolResult, map[string]any, error) {
 		udid, err := a.resolveUDID(in.SimulatorUuid)
 		if err != nil {
 			return nil, nil, err
@@ -137,10 +125,7 @@ func (a *App) registerUITools(srv *mcp.Server) {
 		return nil, out, nil
 	})
 
-	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "ui_point",
-		Description: "Get element at coordinates",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in uiPointIn) (*mcp.CallToolResult, map[string]any, error) {
+	mcp.AddTool(srv, toolMeta("ui_point", "UI Point", "Get element at coordinates", annRO()), func(ctx context.Context, req *mcp.CallToolRequest, in uiPointIn) (*mcp.CallToolResult, map[string]any, error) {
 		udid, err := a.resolveUDID(in.SimulatorUuid)
 		if err != nil {
 			return nil, nil, err
@@ -160,10 +145,7 @@ func (a *App) registerUITools(srv *mcp.Server) {
 		return nil, map[string]any{"found": true, "element": el, "x": in.X, "y": in.Y, "device": udid}, nil
 	})
 
-	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "ui_check_interrupt",
-		Description: "Detect system/app overlays that may block automation (alerts, sheets, permission prompts, banners, SpringBoard). Detection only — never taps. Call after app_launch/navigation before interacting.",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in simOnlyIn) (*mcp.CallToolResult, map[string]any, error) {
+	mcp.AddTool(srv, toolMeta("ui_check_interrupt", "Check Interrupt", "Detect system/app overlays that may block automation (alerts, sheets, permission prompts, banners, SpringBoard). Detection only — never taps. Call after app_launch/navigation before interacting.", annRO()), func(ctx context.Context, req *mcp.CallToolRequest, in simOnlyIn) (*mcp.CallToolResult, map[string]any, error) {
 		udid, err := a.resolveUDID(in.SimulatorUuid)
 		if err != nil {
 			return nil, nil, err
@@ -186,10 +168,7 @@ func (a *App) registerUITools(srv *mcp.Server) {
 		}, nil
 	})
 
-	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "ui_dismiss_interrupt",
-		Description: "Dismiss a detected interrupt with an explicit action (accept/decline/dismiss/button). Never auto-accepts — you must choose. Re-checks after tap.",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in uiDismissInterruptIn) (*mcp.CallToolResult, map[string]any, error) {
+	mcp.AddTool(srv, toolMeta("ui_dismiss_interrupt", "Dismiss Interrupt", "Dismiss a detected interrupt with an explicit action (accept/decline/dismiss/button). Never auto-accepts — you must choose. Re-checks after tap.", annWrite()), func(ctx context.Context, req *mcp.CallToolRequest, in uiDismissInterruptIn) (*mcp.CallToolResult, map[string]any, error) {
 		action := strings.ToLower(strings.TrimSpace(in.Action))
 		if action == "" {
 			return nil, nil, fmtError("action required: accept, decline, dismiss, or button")
