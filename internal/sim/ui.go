@@ -1,8 +1,10 @@
 package sim
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"regexp"
 	"strconv"
 	"strings"
@@ -19,6 +21,7 @@ type FrameValue struct {
 }
 
 func (f *FrameValue) UnmarshalJSON(b []byte) error {
+	*f = FrameValue{}
 	b = bytesTrim(b)
 	if string(b) == "null" || len(b) == 0 {
 		return nil
@@ -35,17 +38,20 @@ func (f *FrameValue) UnmarshalJSON(b []byte) error {
 		return nil
 	}
 	var o struct {
-		X      float64 `json:"x"`
-		Y      float64 `json:"y"`
-		Width  float64 `json:"width"`
-		Height float64 `json:"height"`
+		X      *float64 `json:"x"`
+		Y      *float64 `json:"y"`
+		Width  *float64 `json:"width"`
+		Height *float64 `json:"height"`
 	}
 	if err := json.Unmarshal(b, &o); err != nil {
 		return err
 	}
-	f.X, f.Y, f.Width, f.Height = o.X, o.Y, o.Width, o.Height
+	if o.X == nil || o.Y == nil || o.Width == nil || o.Height == nil {
+		return nil
+	}
+	f.X, f.Y, f.Width, f.Height = *o.X, *o.Y, *o.Width, *o.Height
 	f.Ok = true
-	f.Raw = fmt.Sprintf("{{%g, %g}, {%g, %g}}", o.X, o.Y, o.Width, o.Height)
+	f.Raw = fmt.Sprintf("{{%g, %g}, {%g, %g}}", f.X, f.Y, f.Width, f.Height)
 	return nil
 }
 
@@ -74,30 +80,35 @@ func (f FrameValue) String() string {
 func (f FrameValue) Center() (float64, float64, bool) {
 	if !f.Ok {
 		if x, y, w, h, ok := parseFrameString(f.Raw); ok {
-			return x + w/2, y + h/2, true
+			f.X, f.Y, f.Width, f.Height, f.Ok = x, y, w, h, true
 		}
+	}
+	x, y := f.X+f.Width/2, f.Y+f.Height/2
+	if !f.Ok || f.Width <= 0 || f.Height <= 0 || !finite(x) || !finite(y) || !finite(f.Width) || !finite(f.Height) {
 		return 0, 0, false
 	}
-	return f.X + f.Width/2, f.Y + f.Height/2, true
+	return x, y, true
 }
 
+func finite(v float64) bool { return !math.IsNaN(v) && !math.IsInf(v, 0) }
+
 type Element struct {
-	Type             string     `json:"type,omitempty"`
-	Label            string     `json:"label,omitempty"`
-	Value            string     `json:"value,omitempty"`
-	Identifier       string     `json:"identifier,omitempty"`
-	Hint             string     `json:"hint,omitempty"`
-	Help             string     `json:"help,omitempty"`
-	Role             string     `json:"role,omitempty"`
-	RoleDescription  string     `json:"role_description,omitempty"`
-	Frame            FrameValue `json:"frame,omitempty"`
-	Enabled          *bool      `json:"enabled,omitempty"`
-	Focused          *bool      `json:"focused,omitempty"`
-	Children         []Element  `json:"children,omitempty"`
-	AXLabel          string     `json:"AXLabel,omitempty"`
-	AXValue          string     `json:"AXValue,omitempty"`
-	AXUniqueId       *string    `json:"AXUniqueId,omitempty"`
-	AXFrame          string     `json:"AXFrame,omitempty"`
+	Type            string     `json:"type,omitempty"`
+	Label           string     `json:"label,omitempty"`
+	Value           string     `json:"value,omitempty"`
+	Identifier      string     `json:"identifier,omitempty"`
+	Hint            string     `json:"hint,omitempty"`
+	Help            string     `json:"help,omitempty"`
+	Role            string     `json:"role,omitempty"`
+	RoleDescription string     `json:"role_description,omitempty"`
+	Frame           FrameValue `json:"frame,omitempty"`
+	Enabled         *bool      `json:"enabled,omitempty"`
+	Focused         *bool      `json:"focused,omitempty"`
+	Children        []Element  `json:"children,omitempty"`
+	AXLabel         string     `json:"AXLabel,omitempty"`
+	AXValue         string     `json:"AXValue,omitempty"`
+	AXUniqueId      *string    `json:"AXUniqueId,omitempty"`
+	AXFrame         string     `json:"AXFrame,omitempty"`
 }
 
 type Match struct {
@@ -112,7 +123,9 @@ type Match struct {
 	CenterY    float64 `json:"centerY,omitempty"`
 }
 
-var frameRE = regexp.MustCompile(`\{\{([\d.]+),\s*([\d.]+)\},\s*\{([\d.]+),\s*([\d.]+)\}\}`)
+const frameNumber = `([-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?)`
+
+var frameRE = regexp.MustCompile(`^\s*\{\{\s*` + frameNumber + `\s*,\s*` + frameNumber + `\s*\},\s*\{\s*` + frameNumber + `\s*,\s*` + frameNumber + `\s*\}\}\s*$`)
 
 func bytesTrim(b []byte) []byte {
 	return []byte(strings.TrimSpace(string(b)))
@@ -123,19 +136,28 @@ func parseFrameString(frame string) (x, y, w, h float64, ok bool) {
 	if len(m) != 5 {
 		return 0, 0, 0, 0, false
 	}
-	x, _ = strconv.ParseFloat(m[1], 64)
-	y, _ = strconv.ParseFloat(m[2], 64)
-	w, _ = strconv.ParseFloat(m[3], 64)
-	h, _ = strconv.ParseFloat(m[4], 64)
+	values := []*float64{&x, &y, &w, &h}
+	for i, value := range values {
+		v, err := strconv.ParseFloat(m[i+1], 64)
+		if err != nil || !finite(v) {
+			return 0, 0, 0, 0, false
+		}
+		*value = v
+	}
 	return x, y, w, h, true
 }
 
 func DescribeUI(udid string) (string, error) {
+	return DescribeUIContext(context.Background(), udid)
+}
+
+// DescribeUIContext bounds the accessibility subprocess to its caller's deadline.
+func DescribeUIContext(ctx context.Context, udid string) (string, error) {
 	args := []string{"describe-ui"}
 	if udid != "" {
 		args = append(args, "--udid", udid)
 	}
-	out, err := RunAxe(args...)
+	out, err := RunAxeContext(ctx, args...)
 	if err != nil {
 		return "", err
 	}
@@ -147,15 +169,39 @@ func ParseDescribeUI(raw string) ([]Element, error) {
 	if raw == "" {
 		return nil, fmt.Errorf("empty UI hierarchy")
 	}
-	var arr []Element
-	if err := json.Unmarshal([]byte(raw), &arr); err == nil {
-		return arr, nil
+	var elements []Element
+	switch raw[0] {
+	case '[':
+		if err := json.Unmarshal([]byte(raw), &elements); err != nil {
+			return nil, fmt.Errorf("failed to parse UI hierarchy: %w", err)
+		}
+	case '{':
+		var one Element
+		if err := json.Unmarshal([]byte(raw), &one); err != nil {
+			return nil, fmt.Errorf("failed to parse UI hierarchy: %w", err)
+		}
+		elements = []Element{one}
+	default:
+		return nil, fmt.Errorf("UI hierarchy must be an element object or array")
 	}
-	var one Element
-	if err := json.Unmarshal([]byte(raw), &one); err == nil {
-		return []Element{one}, nil
+	// An empty array is a valid empty snapshot. An unknown object (for example
+	// an error response) must not become an empty, apparently safe screen.
+	var validate func([]Element) error
+	validate = func(els []Element) error {
+		for _, e := range els {
+			if e.Type == "" && e.Role == "" && labelOf(e) == "" && valueOf(e) == "" && idOf(e) == "" && !frameOf(e).Ok && len(e.Children) == 0 {
+				return fmt.Errorf("UI hierarchy contains an empty or unrecognized element")
+			}
+			if err := validate(e.Children); err != nil {
+				return err
+			}
+		}
+		return nil
 	}
-	return nil, fmt.Errorf("failed to parse UI hierarchy")
+	if err := validate(elements); err != nil {
+		return nil, err
+	}
+	return elements, nil
 }
 
 func FrameCenter(frame string) (float64, float64, bool) {
@@ -163,7 +209,7 @@ func FrameCenter(frame string) (float64, float64, bool) {
 	if !ok {
 		return 0, 0, false
 	}
-	return x + w/2, y + h/2, true
+	return (FrameValue{X: x, Y: y, Width: w, Height: h, Ok: true}).Center()
 }
 
 func labelOf(e Element) string {

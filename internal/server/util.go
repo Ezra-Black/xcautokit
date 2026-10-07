@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/xcautokit/xcautokit/internal/session"
@@ -8,14 +9,26 @@ import (
 )
 
 func (a *App) resolveUDID(simulatorUuid string) (string, error) {
+	return a.resolveUDIDContext(context.Background(), simulatorUuid)
+}
+
+type deviceContextKey struct{}
+
+func (a *App) resolveUDIDContext(ctx context.Context, simulatorUuid string) (string, error) {
+	if pinned, ok := ctx.Value(deviceContextKey{}).(string); ok {
+		return pinned, nil
+	}
 	if simulatorUuid != "" {
-		return sim.ResolveUDID(simulatorUuid)
+		return sim.ResolveUDIDContext(ctx, simulatorUuid)
 	}
 	d := a.Session.Get()
 	if d.SimulatorUdid != "" {
-		return sim.ResolveUDID(d.SimulatorUdid)
+		return sim.ResolveUDIDContext(ctx, d.SimulatorUdid)
 	}
-	return sim.ResolveUDID("booted")
+	if d.SimulatorName != "" {
+		return sim.ResolveUDIDContext(ctx, d.SimulatorName)
+	}
+	return sim.ResolveUDIDContext(ctx, "booted")
 }
 
 func (a *App) projectOpts(project, scheme, configuration, destination string) (string, string, string, string, session.Defaults, error) {

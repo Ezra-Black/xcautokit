@@ -4,10 +4,10 @@ import (
 	"context"
 	"strings"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/xcautokit/xcautokit/internal/session"
 	"github.com/xcautokit/xcautokit/internal/sim"
 	"github.com/xcautokit/xcautokit/internal/xcodebuild"
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 type discoverIn struct {
@@ -50,15 +50,15 @@ type launchLogsIn struct {
 }
 
 func (a *App) registerProjectTools(srv *mcp.Server) {
-	mcp.AddTool(srv, toolMeta("discover_projects", "Discover Projects", "Find .xcodeproj and .xcworkspace files recursively", annRO()), func(ctx context.Context, req *mcp.CallToolRequest, in discoverIn) (*mcp.CallToolResult, map[string]any, error) {
-		found, err := xcodebuild.DiscoverProjects(in.Root)
+	addTool(a, srv, toolMeta("discover_projects", "Discover Projects", "Find .xcodeproj and .xcworkspace files recursively", annRO()), func(ctx context.Context, req *mcp.CallToolRequest, in discoverIn) (*mcp.CallToolResult, map[string]any, error) {
+		found, err := xcodebuild.DiscoverProjectsContext(ctx, in.Root)
 		if err != nil {
 			return nil, nil, err
 		}
 		return nil, map[string]any{"count": len(found), "projects": found}, nil
 	})
 
-	mcp.AddTool(srv, toolMeta("list_schemes", "List Schemes", "List available build schemes for project", annRO()), func(ctx context.Context, req *mcp.CallToolRequest, in projectIn) (*mcp.CallToolResult, map[string]any, error) {
+	addTool(a, srv, toolMeta("list_schemes", "List Schemes", "List available build schemes for project", annRO()), func(ctx context.Context, req *mcp.CallToolRequest, in projectIn) (*mcp.CallToolResult, map[string]any, error) {
 		project := in.Project
 		if project == "" {
 			project = a.Session.Get().ProjectPath
@@ -66,20 +66,21 @@ func (a *App) registerProjectTools(srv *mcp.Server) {
 		if project == "" {
 			return nil, nil, fmtError("project path required")
 		}
-		out, err := xcodebuild.ListSchemes(project)
+		out, err := xcodebuild.ListSchemesContext(ctx, project)
 		if err != nil {
 			return nil, nil, err
 		}
 		return nil, map[string]any{"output": out, "project": project, "backend": "xcodebuild"}, nil
 	})
 
-	mcp.AddTool(srv, toolMeta("show_build_settings", "Show Build Settings", "Show build settings for project/scheme", annRO()), func(ctx context.Context, req *mcp.CallToolRequest, in projectIn) (*mcp.CallToolResult, map[string]any, error) {
-		project, scheme, cfg, _, d, err := a.projectOpts(in.Project, in.Scheme, in.Configuration, in.Destination)
+	addTool(a, srv, toolMeta("show_build_settings", "Show Build Settings", "Show build settings for project/scheme", annRO()), func(ctx context.Context, req *mcp.CallToolRequest, in projectIn) (*mcp.CallToolResult, map[string]any, error) {
+		project, scheme, cfg, dest, d, err := a.projectOpts(in.Project, in.Scheme, in.Configuration, in.Destination)
 		if err != nil {
 			return nil, nil, err
 		}
 		out, err := xcodebuild.ShowBuildSettings(xcodebuild.Options{
-			Project: project, Scheme: scheme, Configuration: cfg, DerivedDataPath: firstNonEmpty(in.DerivedDataPath, d.DerivedDataPath),
+			Context: ctx, Project: project, Scheme: scheme, Configuration: cfg, Destination: dest,
+			DerivedDataPath: firstNonEmpty(in.DerivedDataPath, d.DerivedDataPath), SimulatorName: d.SimulatorName, SimulatorUdid: d.SimulatorUdid,
 		})
 		if err != nil {
 			return nil, nil, err
@@ -87,13 +88,14 @@ func (a *App) registerProjectTools(srv *mcp.Server) {
 		return nil, map[string]any{"output": out, "project": project, "scheme": scheme}, nil
 	})
 
-	mcp.AddTool(srv, toolMeta("get_app_bundle_id", "Get App Bundle ID", "Extract app bundle ID from project build settings", annRO()), func(ctx context.Context, req *mcp.CallToolRequest, in projectIn) (*mcp.CallToolResult, map[string]any, error) {
-		project, scheme, cfg, _, d, err := a.projectOpts(in.Project, in.Scheme, in.Configuration, in.Destination)
+	addTool(a, srv, toolMeta("get_app_bundle_id", "Get App Bundle ID", "Extract app bundle ID from project build settings", annRO()), func(ctx context.Context, req *mcp.CallToolRequest, in projectIn) (*mcp.CallToolResult, map[string]any, error) {
+		project, scheme, cfg, dest, d, err := a.projectOpts(in.Project, in.Scheme, in.Configuration, in.Destination)
 		if err != nil {
 			return nil, nil, err
 		}
 		id, err := xcodebuild.BundleID(xcodebuild.Options{
-			Project: project, Scheme: scheme, Configuration: cfg, DerivedDataPath: firstNonEmpty(in.DerivedDataPath, d.DerivedDataPath),
+			Context: ctx, Project: project, Scheme: scheme, Configuration: cfg, Destination: dest,
+			DerivedDataPath: firstNonEmpty(in.DerivedDataPath, d.DerivedDataPath), SimulatorName: d.SimulatorName, SimulatorUdid: d.SimulatorUdid,
 		})
 		if err != nil {
 			return nil, nil, err
@@ -101,22 +103,22 @@ func (a *App) registerProjectTools(srv *mcp.Server) {
 		return nil, map[string]any{"bundleId": id, "project": project, "scheme": scheme}, nil
 	})
 
-	mcp.AddTool(srv, toolMeta("get_sim_app_path", "Get Simulator App Path", "Get installed app path on simulator", annRO()), func(ctx context.Context, req *mcp.CallToolRequest, in getSimAppPathIn) (*mcp.CallToolResult, map[string]any, error) {
+	addTool(a, srv, toolMeta("get_sim_app_path", "Get Simulator App Path", "Get installed app path on simulator", annRO()), func(ctx context.Context, req *mcp.CallToolRequest, in getSimAppPathIn) (*mcp.CallToolResult, map[string]any, error) {
 		if in.BundleId == "" {
 			return nil, nil, fmtError("bundleId parameter required")
 		}
-		udid, err := a.resolveUDID(in.SimulatorUuid)
+		udid, err := a.resolveUDIDContext(ctx, in.SimulatorUuid)
 		if err != nil {
 			return nil, nil, err
 		}
-		out, err := sim.RunSimctl("get_app_container", udid, in.BundleId)
+		out, err := sim.RunSimctlContext(ctx, "get_app_container", udid, in.BundleId)
 		if err != nil {
 			return nil, nil, err
 		}
 		return nil, map[string]any{"path": strings.TrimSpace(string(out)), "bundleId": in.BundleId, "device": udid}, nil
 	})
 
-	mcp.AddTool(srv, toolMeta("session_set_defaults", "Set Session Defaults", "Set session defaults for project, scheme, simulator, etc.", annWrite()), func(ctx context.Context, req *mcp.CallToolRequest, in sessionSetIn) (*mcp.CallToolResult, map[string]any, error) {
+	addTool(a, srv, toolMeta("session_set_defaults", "Set Session Defaults", "Set session defaults for project, scheme, simulator, etc.", annWrite()), func(ctx context.Context, req *mcp.CallToolRequest, in sessionSetIn) (*mcp.CallToolResult, map[string]any, error) {
 		cur, err := a.Session.Set(session.Defaults{
 			ProjectPath: in.ProjectPath, Scheme: in.Scheme, Configuration: in.Configuration,
 			SimulatorUdid: in.SimulatorUdid, SimulatorName: in.SimulatorName,
@@ -128,11 +130,11 @@ func (a *App) registerProjectTools(srv *mcp.Server) {
 		return nil, map[string]any{"success": true, "defaults": cur}, nil
 	})
 
-	mcp.AddTool(srv, toolMeta("session_show_defaults", "Show Session Defaults", "Show current session defaults", annRO()), func(ctx context.Context, req *mcp.CallToolRequest, in emptyIn) (*mcp.CallToolResult, map[string]any, error) {
+	addTool(a, srv, toolMeta("session_show_defaults", "Show Session Defaults", "Show current session defaults", annRO()), func(ctx context.Context, req *mcp.CallToolRequest, in emptyIn) (*mcp.CallToolResult, map[string]any, error) {
 		return nil, map[string]any{"defaults": a.Session.Get()}, nil
 	})
 
-	mcp.AddTool(srv, toolMeta("session_clear_defaults", "Clear Session Defaults", "Clear session defaults (all or specific keys)", annDestructive()), func(ctx context.Context, req *mcp.CallToolRequest, in sessionClearIn) (*mcp.CallToolResult, map[string]any, error) {
+	addTool(a, srv, toolMeta("session_clear_defaults", "Clear Session Defaults", "Clear session defaults (all or specific keys)", annDestructive()), func(ctx context.Context, req *mcp.CallToolRequest, in sessionClearIn) (*mcp.CallToolResult, map[string]any, error) {
 		cur, n, err := a.Session.Clear(in.Keys)
 		if err != nil {
 			return nil, nil, err
@@ -140,19 +142,20 @@ func (a *App) registerProjectTools(srv *mcp.Server) {
 		return nil, map[string]any{"success": true, "cleared": n, "defaults": cur}, nil
 	})
 
-	mcp.AddTool(srv, toolMeta("build_sim", "Build Simulator", "Build project for iOS Simulator (uses Xcode mcpbridge when available, else xcodebuild)", annWrite()), a.handleBuildSim)
+	addTool(a, srv, toolMeta("build_sim", "Build Simulator", "Build the specified project, scheme, configuration, and simulator destination with xcodebuild", annWrite()), a.handleBuildSim)
 
-	mcp.AddTool(srv, toolMeta("build_run_sim", "Build and Run Simulator", "Build and run project on iOS Simulator", annWrite()), a.handleBuildRunSim)
+	addTool(a, srv, toolMeta("build_run_sim", "Build and Run Simulator", "Build, resolve the produced app, install it, and launch on the selected simulator; reports each completed stage", annWrite()), a.handleBuildRunSim)
 
-	mcp.AddTool(srv, toolMeta("test_sim", "Test Simulator", "Run tests for project on iOS Simulator (uses Xcode mcpbridge when available, else xcodebuild)", annWrite()), a.handleTestSim)
+	addTool(a, srv, toolMeta("test_sim", "Test Simulator", "Run project tests on the selected iOS Simulator with xcodebuild", annWrite()), a.handleTestSim)
 
-	mcp.AddTool(srv, toolMeta("clean", "Clean", "Clean build artifacts for project", annDestructive()), func(ctx context.Context, req *mcp.CallToolRequest, in projectIn) (*mcp.CallToolResult, map[string]any, error) {
-		project, scheme, cfg, _, d, err := a.projectOpts(in.Project, in.Scheme, in.Configuration, in.Destination)
+	addTool(a, srv, toolMeta("clean", "Clean", "Clean build artifacts for project", annDestructive()), func(ctx context.Context, req *mcp.CallToolRequest, in projectIn) (*mcp.CallToolResult, map[string]any, error) {
+		project, scheme, cfg, dest, d, err := a.projectOpts(in.Project, in.Scheme, in.Configuration, in.Destination)
 		if err != nil {
 			return nil, nil, err
 		}
 		out, err := xcodebuild.Clean(xcodebuild.Options{
-			Project: project, Scheme: scheme, Configuration: cfg, DerivedDataPath: firstNonEmpty(in.DerivedDataPath, d.DerivedDataPath),
+			Context: ctx, Project: project, Scheme: scheme, Configuration: cfg, Destination: dest,
+			DerivedDataPath: firstNonEmpty(in.DerivedDataPath, d.DerivedDataPath), SimulatorName: d.SimulatorName, SimulatorUdid: d.SimulatorUdid,
 		})
 		if err != nil {
 			return nil, nil, err
@@ -160,124 +163,112 @@ func (a *App) registerProjectTools(srv *mcp.Server) {
 		return nil, map[string]any{"success": true, "output": trimOut(out), "backend": "xcodebuild"}, nil
 	})
 
-	mcp.AddTool(srv, toolMeta("launch_app_logs_sim", "Launch App with Logs", "Launch app on simulator with streaming logs", annWrite()), func(ctx context.Context, req *mcp.CallToolRequest, in launchLogsIn) (*mcp.CallToolResult, map[string]any, error) {
+	addTool(a, srv, toolMeta("launch_app_logs_sim", "Launch App with Logs", "Launch app on simulator with streaming logs", annWrite()), func(ctx context.Context, req *mcp.CallToolRequest, in launchLogsIn) (*mcp.CallToolResult, map[string]any, error) {
+		udid, err := a.resolveUDIDContext(ctx, in.SimulatorUuid)
+		if err != nil {
+			return nil, nil, err
+		}
 		bundleID := in.BundleId
 		if bundleID == "" {
 			project, scheme, cfg, _, d, err := a.projectOpts(in.Project, in.Scheme, "", "")
 			if err != nil {
 				return nil, nil, err
 			}
-			bundleID, err = xcodebuild.BundleID(xcodebuild.Options{Project: project, Scheme: scheme, Configuration: cfg, DerivedDataPath: d.DerivedDataPath})
+			bundleID, err = xcodebuild.BundleID(xcodebuild.Options{Context: ctx, Project: project, Scheme: scheme, Configuration: cfg, DerivedDataPath: d.DerivedDataPath, SimulatorUdid: udid})
 			if err != nil {
 				return nil, nil, err
 			}
 		}
-		udid, err := a.resolveUDID(in.SimulatorUuid)
-		if err != nil {
-			return nil, nil, err
-		}
-		if _, err := sim.RunSimctl("launch", udid, bundleID); err != nil {
+		if _, err := sim.RunSimctlContext(ctx, "launch", udid, bundleID); err != nil {
 			return nil, nil, err
 		}
 		out := map[string]any{
 			"success": true, "bundleId": bundleID, "device": udid,
 			"message": "App launched. Use start_sim_log_cap to stream logs.",
 		}
-		a.attachInterrupts(udid, out)
+		a.attachInterrupts(ctx, udid, out)
 		return nil, out, nil
 	})
+}
+
+func (a *App) buildOptions(ctx context.Context, in projectIn, pinDevice bool) (xcodebuild.Options, error) {
+	project, scheme, cfg, dest, d, err := a.projectOpts(in.Project, in.Scheme, in.Configuration, in.Destination)
+	if err != nil {
+		return xcodebuild.Options{}, err
+	}
+	opts := xcodebuild.Options{
+		Context: ctx, Project: project, Scheme: scheme, Configuration: cfg, Destination: dest,
+		DerivedDataPath: firstNonEmpty(in.DerivedDataPath, d.DerivedDataPath),
+		SimulatorName:   d.SimulatorName, SimulatorUdid: d.SimulatorUdid,
+	}
+	if pinDevice {
+		selector, err := deviceFromDestination(dest, "")
+		if err != nil {
+			return opts, err
+		}
+		udid, err := a.resolveUDIDContext(ctx, selector)
+		if err != nil {
+			return opts, err
+		}
+		opts.SimulatorUdid = udid
+		opts.Destination = "platform=iOS Simulator,id=" + udid
+	}
+	opts.DerivedDataPath = xcodebuild.DerivedDataPath(opts)
+	return opts, nil
 }
 
 func (a *App) handleBuildSim(ctx context.Context, req *mcp.CallToolRequest, in projectIn) (*mcp.CallToolResult, map[string]any, error) {
-	project, scheme, cfg, dest, d, err := a.projectOpts(in.Project, in.Scheme, in.Configuration, in.Destination)
+	opts, err := a.buildOptions(ctx, in, false)
 	if err != nil {
 		return nil, nil, err
 	}
-	if a.Bridge.Enabled() {
-		text, structured, berr := a.Bridge.BuildProject(ctx, d.TabIdentifier, scheme, cfg)
-		if berr == nil {
-			out := map[string]any{"success": true, "backend": "mcpbridge", "output": trimOut(text)}
-			if structured != nil {
-				out["result"] = structured
-			}
-			if project != "" {
-				out["project"] = project
-			}
-			return nil, out, nil
-		}
-		// fall through to xcodebuild
-		_ = berr
-	}
-	out, err := xcodebuild.Build(xcodebuild.Options{
-		Project: project, Scheme: scheme, Configuration: cfg, Destination: dest,
-		DerivedDataPath: firstNonEmpty(in.DerivedDataPath, d.DerivedDataPath),
-		SimulatorName:   d.SimulatorName, SimulatorUdid: d.SimulatorUdid,
-	})
+	log, err := xcodebuild.Build(opts)
+	out := map[string]any{"success": err == nil, "built": err == nil, "backend": "xcodebuild", "output": trimOut(log), "project": opts.Project, "scheme": opts.Scheme, "derivedDataPath": opts.DerivedDataPath}
 	if err != nil {
-		return nil, nil, err
+		out["stage"] = "build"
+		out["message"] = err.Error()
+		return &mcp.CallToolResult{IsError: true}, out, nil
 	}
-	return nil, map[string]any{"success": true, "backend": "xcodebuild", "output": trimOut(out), "project": project, "scheme": scheme}, nil
+	return nil, out, nil
 }
 
 func (a *App) handleTestSim(ctx context.Context, req *mcp.CallToolRequest, in projectIn) (*mcp.CallToolResult, map[string]any, error) {
-	project, scheme, cfg, dest, d, err := a.projectOpts(in.Project, in.Scheme, in.Configuration, in.Destination)
+	opts, err := a.buildOptions(ctx, in, true)
 	if err != nil {
 		return nil, nil, err
 	}
-	if a.Bridge.Enabled() {
-		text, structured, berr := a.Bridge.RunAllTests(ctx, d.TabIdentifier, scheme)
-		if berr == nil {
-			out := map[string]any{"success": true, "backend": "mcpbridge", "output": trimOut(text)}
-			if structured != nil {
-				out["result"] = structured
-			}
-			return nil, out, nil
-		}
-	}
-	out, err := xcodebuild.Test(xcodebuild.Options{
-		Project: project, Scheme: scheme, Configuration: cfg, Destination: dest,
-		DerivedDataPath: firstNonEmpty(in.DerivedDataPath, d.DerivedDataPath),
-		SimulatorName:   d.SimulatorName, SimulatorUdid: d.SimulatorUdid,
-	})
+	log, err := xcodebuild.Test(opts)
+	out := map[string]any{"success": err == nil, "tested": err == nil, "backend": "xcodebuild", "output": trimOut(log), "device": opts.SimulatorUdid, "derivedDataPath": opts.DerivedDataPath}
 	if err != nil {
-		return nil, nil, err
+		out["stage"] = "test"
+		out["message"] = err.Error()
+		return &mcp.CallToolResult{IsError: true}, out, nil
 	}
-	return nil, map[string]any{"success": true, "backend": "xcodebuild", "output": trimOut(out)}, nil
+	return nil, out, nil
 }
 
 func (a *App) handleBuildRunSim(ctx context.Context, req *mcp.CallToolRequest, in projectIn) (*mcp.CallToolResult, map[string]any, error) {
-	_, out, err := a.handleBuildSim(ctx, req, in)
+	opts, err := a.buildOptions(ctx, in, true)
 	if err != nil {
 		return nil, nil, err
 	}
-	project, scheme, cfg, _, d, err := a.projectOpts(in.Project, in.Scheme, in.Configuration, in.Destination)
+	result, err := xcodebuild.BuildRun(opts, "")
+	out := map[string]any{
+		"success": err == nil, "backend": "xcodebuild", "stage": result.Stage,
+		"built": result.Built, "installed": result.Installed, "launched": result.Launched,
+		"project": opts.Project, "scheme": opts.Scheme, "device": opts.SimulatorUdid,
+		"derivedDataPath": opts.DerivedDataPath, "output": trimOut(result.Output),
+	}
+	if result.App.Path != "" {
+		out["appPath"] = result.App.Path
+		out["bundleId"] = result.App.BundleID
+		out["target"] = result.App.Target
+	}
 	if err != nil {
-		return nil, out, nil
+		out["message"] = err.Error()
+		return &mcp.CallToolResult{IsError: true}, out, nil
 	}
-	bundleID, err := xcodebuild.BundleID(xcodebuild.Options{
-		Project: project, Scheme: scheme, Configuration: cfg, DerivedDataPath: firstNonEmpty(in.DerivedDataPath, d.DerivedDataPath),
-	})
-	if err != nil {
-		out["warning"] = "built but could not resolve bundle ID: " + err.Error()
-		return nil, out, nil
-	}
-	udid := d.SimulatorUdid
-	if udid == "" {
-		udid = "booted"
-	}
-	// Try install from common DerivedData locations is complex; launch if already installed.
-	if _, lerr := sim.RunSimctl("launch", udid, bundleID); lerr != nil {
-		out["bundleId"] = bundleID
-		out["warning"] = "build ok; launch failed (install .app first): " + lerr.Error()
-		return nil, out, nil
-	}
-	out["bundleId"] = bundleID
-	out["launched"] = true
-	resolved, _ := a.resolveUDID(udid)
-	if resolved == "" {
-		resolved = udid
-	}
-	a.attachInterrupts(resolved, out)
+	a.attachInterrupts(ctx, opts.SimulatorUdid, out)
 	return nil, out, nil
 }
 

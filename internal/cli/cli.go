@@ -52,7 +52,7 @@ Usage:
   xcautokit status              Show simulator + Xcode backend status
   xcautokit interrupt check [--udid UDID]
   xcautokit interrupt dismiss --action decline|accept|dismiss [--udid UDID]
-  xcautokit init [--dir PATH]   Write AGENTS.md + Cursor MCP snippet
+  xcautokit init [--dir PATH]   Add MCP config + host skill; preserve existing files
   xcautokit version             Print version
   xcautokit help                Show this help
 
@@ -128,6 +128,8 @@ func cmdDoctor() error {
 	st, err := sim.GetStatus()
 	if err != nil {
 		add("simulator", false, err.Error())
+	} else if st.SelectionRequired {
+		add("simulator", true, "multiple devices booted — select an explicit simulator UUID")
 	} else if st.HasBooted && st.BootedDevice != nil {
 		add("simulator", true, fmt.Sprintf("booted %s (%s)", st.BootedDevice.Name, st.BootedDevice.UDID))
 	} else {
@@ -139,7 +141,7 @@ func cmdDoctor() error {
 	if bst.Available {
 		add("mcpbridge", true, bst.BridgePath)
 	} else {
-		add("mcpbridge", false, "needs Xcode 26.3+ — XCAutokit falls back to xcodebuild")
+		add("mcpbridge", false, "optional live IDE tools need Xcode 26.3+; project builds use xcodebuild")
 	}
 
 	fail := 0
@@ -169,80 +171,6 @@ func cmdStatus() error {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	return enc.Encode(out)
-}
-
-func cmdInit(args []string) error {
-	dir := "."
-	for i := 0; i < len(args); i++ {
-		if args[i] == "--dir" && i+1 < len(args) {
-			dir = args[i+1]
-			i++
-		}
-	}
-	abs, err := filepath.Abs(dir)
-	if err != nil {
-		return err
-	}
-	agents := filepath.Join(abs, "AGENTS.md")
-	if err := os.WriteFile(agents, []byte(agentsTemplate()), 0644); err != nil {
-		return err
-	}
-	cursorDir := filepath.Join(abs, ".cursor")
-	_ = os.MkdirAll(cursorDir, 0755)
-	mcpPath := filepath.Join(cursorDir, "mcp.json")
-	mcp := `{
-  "mcpServers": {
-    "xcautokit": {
-      "command": "npx",
-      "args": ["-y", "xcautokit@latest", "mcp"]
-    }
-  }
-}
-`
-	if err := os.WriteFile(mcpPath, []byte(mcp), 0644); err != nil {
-		return err
-	}
-	fmt.Printf("Wrote %s\nWrote %s\n", agents, mcpPath)
-	fmt.Println("Reload MCP in your client, then run: xcautokit doctor")
-	return nil
-}
-
-func agentsTemplate() string {
-	return `# XCAutokit
-
-Use XCAutokit as the first-party MCP for Xcode + iOS Simulator work.
-
-## Install
-
-` + "```json" + `
-{
-  "mcpServers": {
-    "xcautokit": {
-      "command": "npx",
-      "args": ["-y", "xcautokit@latest", "mcp"]
-    }
-  }
-}
-` + "```" + `
-
-Or: ` + "`npm i -g xcautokit && xcautokit mcp`" + `
-
-## Workflow
-
-1. ` + "`session_set_defaults`" + ` with projectPath + scheme
-2. Prefer ` + "`build_sim` / `test_sim`" + ` (mcpbridge when Xcode 26.3+, else xcodebuild)
-3. After launch: read ` + "`hasInterrupt`" + ` on the launch result (auto-attached), or call ` + "`ui_check_interrupt`" + `. If blocked, ` + "`ui_dismiss_interrupt`" + ` with explicit action. Never silently auto-accept permissions.
-4. Verify with ` + "`ui_summary`" + `, ` + "`screenshot`" + `, ` + "`gesture`" + ` (input tools refuse while overlays block)
-5. Capture ops return a **process-local ticket** — pass it back on stop; MCP restart invalidates it
-
-## Interrupts (built into MCP)
-
-MCP initialize instructions + resources ` + "`xcautokit://agent-guide`" + ` and ` + "`simulator://interrupts`" + ` ship this to every client. Cursor rules are not required for customers.
-
-## Xcode live backend
-
-Enable Xcode Settings → Intelligence → Allow external agents to use Xcode tools.
-`
 }
 
 func lookPath(bin string) (string, error) {

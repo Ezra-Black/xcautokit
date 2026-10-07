@@ -91,10 +91,8 @@ func isSheetLike(e Element) bool {
 
 func isBannerLike(e Element) bool {
 	t := typeBlob(e)
-	label := strings.ToLower(labelOf(e))
-	return strings.Contains(t, "banner") ||
-		strings.Contains(t, "notification") ||
-		strings.Contains(label, "notification")
+	// A Settings row labelled "Notifications" is not a blocking overlay.
+	return strings.Contains(t, "banner") || strings.Contains(t, "notification")
 }
 
 func collectButtons(e Element) []InterruptButton {
@@ -102,7 +100,7 @@ func collectButtons(e Element) []InterruptButton {
 	var walk func([]Element)
 	walk = func(els []Element) {
 		for _, c := range els {
-			if isButtonLike(c) {
+			if isButtonLike(c) && (c.Enabled == nil || *c.Enabled) {
 				lbl := strings.TrimSpace(labelOf(c))
 				if lbl == "" {
 					lbl = strings.TrimSpace(valueOf(c))
@@ -240,12 +238,20 @@ func classifyNode(e Element) *Interrupt {
 		return &Interrupt{Kind: kind, Title: title, Message: message, Buttons: buttons, Confidence: conf}
 	case isBannerLike(e):
 		return &Interrupt{Kind: KindBanner, Title: title, Message: message, Buttons: buttons, Confidence: 0.75}
-	case buttonSetLooksLikePermission(buttons) && (title != "" || message != ""):
+	case buttonSetLooksLikePermission(buttons) && permissionText(title+" "+message):
 		return &Interrupt{Kind: KindPermission, Title: title, Message: message, Buttons: buttons, Confidence: 0.8}
 	case len(buttons) >= 1 && (isAlertLike(e) || strings.Contains(blob, "alert")):
 		return &Interrupt{Kind: KindAlert, Title: title, Message: message, Buttons: buttons, Confidence: 0.7}
 	}
 	return nil
+}
+
+func permissionText(text string) bool {
+	text = normLower(text)
+	for _, phrase := range []string{"would like to", "access your", "use your location", "track your", "track you", "allow access", "allow widgets", "permission"} {
+		if strings.Contains(text, phrase) { return true }
+	}
+	return false
 }
 
 func detectSpringBoard(elements []Element) *Interrupt {
@@ -393,7 +399,7 @@ func PickInterruptButton(intr Interrupt, action, buttonLabel string) (*Interrupt
 		if b := matchLabelList(intr.Buttons, declineLabels, false); b != nil {
 			return b, nil
 		}
-		if len(intr.Buttons) == 1 {
+		if len(intr.Buttons) == 1 && intr.Kind != KindPermission {
 			return &intr.Buttons[0], nil
 		}
 		return nil, fmt.Errorf("no dismiss-like button found (labels: %s)", buttonLabels(intr.Buttons))

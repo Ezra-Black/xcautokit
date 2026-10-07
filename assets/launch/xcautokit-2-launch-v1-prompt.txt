@@ -1,0 +1,31 @@
+Create a finished, premium product launch graphic for XCAutokit 2.0, an Xcode + iOS Simulator MCP developer tool. Landscape 16:9, ideally 2048x1152, beautifully art-directed, crisp professional typography, visually striking and extremely legible on a social feed. This is a designed announcement poster, not a fake application screenshot.
+
+Visual identity: deep near-black teal background (#041716), subtle precise technical grid and a soft mint halo, restrained mint/ivory type, deep teal (#0F766E), luminous mint (#CCFBF1), one small amber (#FBBF24) accent. Make an original sculptural dimensional logo at the upper right: an angular ivory X, like two interlocking circuit paths, inset into a rounded teal square, with a small amber circular status light in its bottom-right corner. Clean engineered geometry, sophisticated studio lighting, no stock robot or generic AI brain. The logo should feel like a real developer product identity. Integrate faint simulator-window outlines behind it, without fake UI text.
+
+Layout: generous safe margins, meticulous optical alignment. Upper left a small label "AVAILABLE ON NPM"; large hero title "XCAutokit 2.0" on one line with a compact subtitle "Xcode + iOS Simulator MCP". Logo occupies upper right but never crowds the text. Below, three large evenly spaced metric panels, integrated into the background with subtle fine rules and translucent surfaces rather than heavy boxes. Numbers must be huge and immediately readable:
+Panel 1:
+"75%"
+"fewer tool calls"
+"4 → 1"
+Panel 2:
+"~38%"
+"less execution time"
+"2.01s → 1.26s"
+Panel 3:
+"~40%"
+"smaller JSON responses"
+
+Under the metric panels a small but plainly readable evidence caption:
+"Batched vs separate calls • 3-run local fixture medians • Host/model time excluded"
+
+Then a refined single row of four feature labels:
+"Verified workflows"   "Safer UI actions"   "Native screenshots"   "Host-agent coordination"
+
+Near the bottom, a large beautiful terminal-inspired install command strip. Small label "INSTALL", followed by prominent exact monospaced command text:
+"npm install -g xcautokit@latest"
+At the bottom right or beneath the strip, the exact URL:
+"npmjs.com/package/xcautokit"
+
+All supplied text must be rendered accurately, no spelling errors, all text visible, clear hierarchy. The installation command must be one of the most prominent elements after the title and metrics. Make the whole composition feel fast, intelligent, precise, polished and memorable. No additional numbers, benchmark graphs, claims, logos, watermarks, badges, tiny illegible text, or internal-agent imagery. Metrics compare invocation methods on the same server, not old versus new release. Do not add "faster AI", "best", or "fastest".
+
+Verified benchmark source: testdata/SimulatorFixture/VALIDATION.md

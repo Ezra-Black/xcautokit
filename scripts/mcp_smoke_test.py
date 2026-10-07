@@ -1,558 +1,284 @@
 #!/usr/bin/env python3
-"""Comprehensive XCAutokit MCP smoke test."""
+"""Bounded MCP contract checks; no Xcode or simulator needed by default.
 
+Build: go build -o xcautokit .
+Live observation: python3 scripts/mcp_smoke_test.py --simulator UUID
+Live mode only reads UI and captures one temporary screenshot. It never sends
+input, boots a device, launches an app, or dismisses a prompt.
+"""
 from __future__ import annotations
 
+import argparse
+import base64
 import json
+import os
+from pathlib import Path
+import queue
+import re
 import subprocess
 import sys
+import tempfile
+import threading
 import time
-from pathlib import Path
 from typing import Any
+import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
-BIN = ROOT / "xcautokit"
-PROJECT = "/Users/ezrablack/Developer/Pennywise/pennywiseiOS/PennyWise.xcworkspace"
-SCHEME = "PennyWise"
-UDID = "AD253295-45DA-4B6F-BD77-238B0AE6D911"
-SHOT_DIR = Path.home() / "Pictures" / "xcautokit" / "screenshots" / "mcp_smoke"
-SHOT_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def require(condition: bool, message: str) -> None:
+    if not condition:
+        raise AssertionError(message)
 
 
 class MCPClient:
-    def __init__(self, bin_path: Path):
-        self.proc = subprocess.Popen(
-            [str(bin_path)],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            bufsize=1,
-        )
-        self._id = 1
+    """Newline-delimited stdio with real deadlines and bounded teardown."""
 
-    def close(self):
+    def __init__(self, binary: Path, env: dict[str, str], timeout: float):
+        self.timeout, self.next_id = timeout, 0
+        self.last_response_bytes = 0
+        self.messages: queue.Queue[Any] = queue.Queue()
+        self.stderr = tempfile.TemporaryFile(mode="w+b")
         try:
-            self.proc.terminate()
-            self.proc.wait(timeout=2)
-        except Exception:
-            self.proc.kill()
+            self.proc = subprocess.Popen(
+                [str(binary), "mcp"], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                stderr=self.stderr, text=True, encoding="utf-8", env=env, bufsize=1,
+            )
+        except BaseException:
+            self.stderr.close()
+            raise
+        self.reader = threading.Thread(target=self._read, daemon=True)
+        self.reader.start()
 
-    def send(self, msg: dict):
-        assert self.proc.stdin
-        self.proc.stdin.write(json.dumps(msg) + "\n")
+    def _read(self) -> None:
+        assert self.proc.stdout is not None
+        try:
+            for line in self.proc.stdout:
+                if line.strip():
+                    self.messages.put((json.loads(line), len(line.rstrip("\r\n").encode("utf-8"))))
+        except Exception as exc:
+            self.messages.put(exc)
+        finally:
+            self.messages.put(EOFError("MCP server closed stdout"))
+
+    def __enter__(self) -> MCPClient:
+        return self
+
+    def __exit__(self, *_: Any) -> None:
+        if self.proc.stdin:
+            self.proc.stdin.close()
+        try:
+            self.proc.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            self.proc.terminate()
+            try:
+                self.proc.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                self.proc.kill()
+                self.proc.wait(timeout=2)
+        self.reader.join(timeout=1)
+        if self.proc.stdout:
+            self.proc.stdout.close()
+        self.stderr.close()
+
+    def send(self, message: dict[str, Any]) -> None:
+        assert self.proc.stdin is not None
+        self.proc.stdin.write(json.dumps(message) + "\n")
         self.proc.stdin.flush()
 
-    def read(self, timeout_s: float = 120.0) -> dict:
-        assert self.proc.stdout
-        deadline = time.time() + timeout_s
-        while time.time() < deadline:
-            line = self.proc.stdout.readline()
-            if not line:
-                err = self.proc.stderr.read() if self.proc.stderr else ""
-                raise RuntimeError(f"EOF from server: {err}")
-            line = line.strip()
-            if not line:
+    def request(self, method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+        self.next_id += 1
+        self.send({"jsonrpc": "2.0", "id": self.next_id, "method": method, "params": params or {}})
+        deadline = time.monotonic() + self.timeout
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError(f"{method} exceeded {self.timeout:g}s")
+            try:
+                item = self.messages.get(timeout=remaining)
+            except queue.Empty as exc:
+                raise TimeoutError(f"{method} exceeded {self.timeout:g}s") from exc
+            if isinstance(item, Exception):
+                raise item
+            message, response_bytes = item
+            require(isinstance(message, dict), "MCP message must be an object")
+            require(message.get("jsonrpc") == "2.0", "Missing JSON-RPC version")
+            if "method" in message:
+                require("id" not in message, "Server requested an unadvertised client capability")
                 continue
-            obj = json.loads(line)
-            if "id" in obj:
-                return obj
-        raise TimeoutError("timeout waiting for MCP response")
+            require(message.get("id") == self.next_id, "Mismatched MCP response id")
+            self.last_response_bytes = response_bytes
+            return message
 
-    def initialize(self) -> dict:
-        self.send(
-            {
-                "jsonrpc": "2.0",
-                "id": self._next(),
-                "method": "initialize",
-                "params": {
-                    "protocolVersion": "2025-06-18",
-                    "capabilities": {},
-                    "clientInfo": {"name": "xcautokit-smoke", "version": "1.0"},
-                },
-            }
-        )
-        res = self.read()
+    def initialize(self) -> dict[str, Any]:
+        result = rpc_result(self.request("initialize", {
+            "protocolVersion": "2025-06-18", "capabilities": {},
+            "clientInfo": {"name": "xcautokit-smoke", "version": "2"},
+        }))
         self.send({"jsonrpc": "2.0", "method": "notifications/initialized"})
-        return res
+        return result
 
-    def _next(self) -> int:
-        i = self._id
-        self._id += 1
-        return i
+    def list_items(self, method: str, key: str) -> list[dict[str, Any]]:
+        items: list[dict[str, Any]] = []
+        cursor, seen = None, set()
+        for _ in range(100):
+            result = rpc_result(self.request(method, {"cursor": cursor} if cursor else {}))
+            require(isinstance(result.get(key), list), f"{method} missing {key}")
+            items.extend(result[key])
+            cursor = result.get("nextCursor")
+            if not cursor:
+                return items
+            require(isinstance(cursor, str) and cursor not in seen, "Invalid pagination cursor")
+            seen.add(cursor)
+        raise AssertionError(f"{method} exceeded 100 pages")
 
-    def request(self, method: str, params: dict | None = None, timeout_s: float = 120.0) -> dict:
-        self.send({"jsonrpc": "2.0", "id": self._next(), "method": method, "params": params or {}})
-        return self.read(timeout_s=timeout_s)
-
-    def call_tool(self, name: str, arguments: dict | None = None, timeout_s: float = 180.0) -> dict:
-        return self.request(
-            "tools/call",
-            {"name": name, "arguments": arguments or {}},
-            timeout_s=timeout_s,
-        )
-
-
-def tool_ok(resp: dict) -> tuple[bool, str]:
-    if "error" in resp:
-        return False, f"protocol error: {resp['error']}"
-    result = resp.get("result") or {}
-    if result.get("isError"):
-        content = result.get("content") or []
-        text = ""
-        if content and isinstance(content[0], dict):
-            text = content[0].get("text", "")
-        return False, text or "isError=true"
-    sc = result.get("structuredContent")
-    if sc is not None:
-        return True, json.dumps(sc)[:200]
-    content = result.get("content") or []
-    if content:
-        return True, str(content[0].get("text", ""))[:200]
-    return True, "(empty ok)"
+    def call(self, name: str, arguments: dict[str, Any] | None = None) -> dict[str, Any]:
+        return rpc_result(self.request("tools/call", {"name": name, "arguments": arguments or {}}))
 
 
-def expect_error(resp: dict) -> tuple[bool, str]:
-    """Pass if tool returns a handled error (bridge unavailable etc)."""
-    ok, msg = tool_ok(resp)
-    if not ok:
-        return True, f"expected failure: {msg[:180]}"
-    # Some tools return success=false style maps
-    result = resp.get("result") or {}
-    sc = result.get("structuredContent")
-    if isinstance(sc, dict) and sc.get("available") is False:
-        return True, "unavailable reported cleanly"
-    return False, f"expected error but succeeded: {msg[:180]}"
+def rpc_result(response: dict[str, Any]) -> dict[str, Any]:
+    require("error" not in response, f"JSON-RPC error: {response.get('error')}")
+    require(isinstance(response.get("result"), dict), "Missing result object")
+    return response["result"]
+
+
+def structured(result: dict[str, Any]) -> dict[str, Any]:
+    require(not result.get("isError"), f"Tool failed: {result.get('content')}")
+    output = result.get("structuredContent")
+    require(isinstance(output, dict), "Missing structuredContent object")
+    require(output.get("success") is not False, "Failure returned without isError=true")
+    return output
+
+
+def cli_catalog(binary: Path, env: dict[str, str], timeout: float) -> dict[str, str]:
+    result = subprocess.run([str(binary), "tools"], env=env, capture_output=True,
+                            text=True, check=True, timeout=timeout)
+    catalog = {}
+    for line in result.stdout.splitlines():
+        match = re.match(r"^([a-z][a-z0-9_]*)\s+([a-z][a-z0-9_]*)\s+", line)
+        if match:
+            catalog[match.group(1)] = match.group(2)
+    return catalog
 
 
 def main() -> int:
-    if not BIN.exists():
-        print("missing binary", BIN)
-        return 2
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--binary", type=Path, default=ROOT / "xcautokit", help="Built Go binary (default: repo ./xcautokit)")
+    parser.add_argument("--simulator", type=uuid.UUID, metavar="UUID", help="Observe this booted simulator; never send input")
+    parser.add_argument("--timeout", type=float, default=30, help="Per-request deadline, 1-120 seconds (default: 30)")
+    args = parser.parse_args()
+    if not 1 <= args.timeout <= 120:
+        parser.error("--timeout must be between 1 and 120 seconds")
+    binary = args.binary.expanduser().resolve()
+    if not binary.is_file():
+        parser.error(f"Missing binary: {binary}; build with: go build -o xcautokit .")
+    passed = 0
 
-    c = MCPClient(BIN)
-    results: list[tuple[str, bool, str]] = []
-
-    def record(name: str, ok: bool, detail: str):
-        results.append((name, ok, detail))
-        mark = "PASS" if ok else "FAIL"
-        print(f"[{mark}] {name}: {detail[:240]}")
+    def ok(label: str) -> None:
+        nonlocal passed
+        passed += 1
+        print(f"[PASS] {label}", flush=True)
 
     try:
-        init = c.initialize()
-        info = (init.get("result") or {}).get("serverInfo") or {}
-        caps = (init.get("result") or {}).get("capabilities") or {}
-        instructions = (init.get("result") or {}).get("instructions") or ""
-        record(
-            "initialize",
-            info.get("name") == "xcautokit" and info.get("version") == "1.0.0",
-            f"serverInfo={info} caps={sorted(caps)}",
-        )
-        record(
-            "initialize:instructions",
-            "ui_dismiss_interrupt" in instructions and "hasInterrupt" in instructions,
-            f"len={len(instructions)}",
-        )
+        with tempfile.TemporaryDirectory(prefix="xcautokit-smoke-") as temp:
+            workspace = Path(temp)
+            # Isolate session state and disable live Xcode discovery; preserve HOME.
+            env = dict(os.environ, XCAUTOKIT_SESSION_FILE=str(workspace / "session.json"),
+                       XCAUTOKIT_STATE_DIR=str(workspace / "state"),
+                       XCAUTOKIT_XCODE_BACKEND="off", XCAUTOKIT_WORKFLOWS="all")
+            version = subprocess.run([str(binary), "version"], env=env, capture_output=True,
+                                     text=True, check=True, timeout=args.timeout).stdout.strip().removeprefix("xcautokit ")
+            catalog = cli_catalog(binary, env, args.timeout)
+            require(bool(catalog), "CLI catalog is empty")
+            with MCPClient(binary, env, args.timeout) as client:
+                initialized = client.initialize()
+                info = initialized.get("serverInfo", {})
+                require(info.get("name") == "xcautokit" and info.get("version") == version, "MCP/CLI identity mismatch")
+                require({"tools", "resources", "prompts"} <= initialized.get("capabilities", {}).keys(), "Missing capabilities")
+                require("ui_dismiss_interrupt" in initialized.get("instructions", ""), "Missing interrupt instructions")
+                ok("initialize, version, capabilities, instructions")
 
-        tools = c.request("tools/list")
-        tool_names = sorted(t["name"] for t in (tools.get("result") or {}).get("tools") or [])
-        record("tools/list", len(tool_names) >= 40, f"count={len(tool_names)}")
+                definitions = client.list_items("tools/list", "tools")
+                tools = {item["name"]: item for item in definitions}
+                require(len(tools) == len(definitions), "Duplicate tool names")
+                require(set(tools) == set(catalog), f"CLI/MCP catalog mismatch: {sorted(set(tools) ^ set(catalog))}")
+                for name, definition in tools.items():
+                    require(definition.get("inputSchema", {}).get("type") == "object", f"{name}: missing input object schema")
+                    require(bool(definition.get("description")), f"{name}: missing description")
+                for name in ("ui_summary", "ui_find", "session_show_defaults", "discover_projects", "screenshot"):
+                    require(tools[name].get("annotations", {}).get("readOnlyHint") is True, f"{name}: missing readOnlyHint")
+                ok(f"tools/list and schemas ({len(tools)} tools)")
 
-        # Schema spot-checks
-        by_name = {t["name"]: t for t in (tools.get("result") or {}).get("tools") or []}
-        ui_find_schema = (by_name.get("ui_find") or {}).get("inputSchema") or {}
-        record(
-            "schema:ui_find",
-            "by" in (ui_find_schema.get("properties") or {}) and "query" in (ui_find_schema.get("required") or []),
-            f"required={ui_find_schema.get('required')} props={list((ui_find_schema.get('properties') or {}).keys())}",
-        )
-        build_schema = (by_name.get("build_sim") or {}).get("inputSchema") or {}
-        record(
-            "schema:build_sim",
-            "project" in (build_schema.get("properties") or {}),
-            f"props={list((build_schema.get('properties') or {}).keys())}",
-        )
+                uris = {item["uri"] for item in client.list_items("resources/list", "resources")}
+                for uri in ("simulator://config", "xcautokit://agent-guide", "xcode://status"):
+                    require(uri in uris, f"Missing resource {uri}")
+                    result = rpc_result(client.request("resources/read", {"uri": uri}))
+                    require(bool(result.get("contents")), f"Empty resource {uri}")
+                ok("resources/list and simulator-independent resource reads")
 
-        resources = c.request("resources/list")
-        uris = sorted(r["uri"] for r in (resources.get("result") or {}).get("resources") or [])
-        record(
-            "resources/list",
-            uris == [
-                "simulator://config",
-                "simulator://devices",
-                "simulator://interrupts",
-                "simulator://status",
-                "xcautokit://agent-guide",
-                "xcode://status",
-            ],
-            f"uris={uris}",
-        )
+                prompts = client.list_items("prompts/list", "prompts")
+                require({"build-and-verify", "ui-explore", "fix-failing-test", "handle-interrupt"}
+                        <= {item["name"] for item in prompts}, "Missing standard prompt")
+                for prompt in prompts:
+                    result = rpc_result(client.request("prompts/get", {"name": prompt["name"]}))
+                    require(bool(result.get("messages")), f"Empty prompt {prompt['name']}")
+                ok("prompts/list and retrieval")
 
-        for uri in uris:
-            resp = c.request("resources/read", {"uri": uri})
-            ok = "error" not in resp and bool((resp.get("result") or {}).get("contents"))
-            text = ""
-            if ok:
-                text = ((resp.get("result") or {}).get("contents") or [{}])[0].get("text", "")[:120]
-            record(f"resources/read:{uri}", ok, text or str(resp.get("error")))
+                require(structured(client.call("session_show_defaults")).get("defaults") == {}, "Session is not isolated")
+                fixture = workspace / "projects"
+                project, nested = fixture / "Example.xcodeproj", fixture / "Nested" / "Example.xcworkspace"
+                project.mkdir(parents=True)
+                nested.mkdir(parents=True)
+                (fixture / "node_modules" / "Ignored.xcodeproj").mkdir(parents=True)
+                found = structured(client.call("discover_projects", {"root": str(fixture)}))
+                require(found.get("count") == 2 and set(found.get("projects", [])) == {str(project), str(nested)}, "Incorrect discovery results")
+                ok("structured isolated session and generic project discovery")
 
-        prompts = c.request("prompts/list")
-        prompt_names = sorted(p["name"] for p in (prompts.get("result") or {}).get("prompts") or [])
-        record(
-            "prompts/list",
-            prompt_names == ["build-and-verify", "fix-failing-test", "handle-interrupt", "ui-explore"],
-            f"names={prompt_names}",
-        )
-        for pname in prompt_names:
-            resp = c.request("prompts/get", {"name": pname})
-            msgs = ((resp.get("result") or {}).get("messages") or [])
-            record(f"prompts/get:{pname}", "error" not in resp and len(msgs) > 0, f"messages={len(msgs)}")
+                # Invalid inputs stop before any simulator/input operation.
+                for name, arguments in (
+                    ("ui_find", {"by": "label", "query": ""}), ("ui_search", {"query": ""}),
+                    ("record_stop", {"ticket": "smoke-nonexistent-ticket"}), ("list_schemes", {}),
+                ):
+                    result = client.call(name, arguments)
+                    require(result.get("isError") is True, f"{name}: expected handled failure with isError=true")
+                    require(bool(result.get("content")), f"{name}: error has no explanation")
+                unknown = client.request("tools/call", {"name": "smoke_nonexistent_tool", "arguments": {}})
+                require("error" in unknown or unknown.get("result", {}).get("isError") is True, "Unknown tool returned success")
+                ok("validation failures and unknown tool cannot masquerade as success")
 
-        # ---- Device ----
-        for name, args in [
-            ("status", {}),
-            ("device_list", {}),
-            ("open_sim", {}),
-        ]:
-            ok, detail = tool_ok(c.call_tool(name, args))
-            record(f"tool:{name}", ok, detail)
+                if args.simulator:
+                    udid = str(args.simulator).upper()
+                    for name in ("ui_summary", "ui_describe", "ui_check_interrupt"):
+                        result = structured(client.call(name, {"simulatorUuid": udid}))
+                        require(result.get("device") == udid, f"{name}: wrong simulator")
+                    screenshot = workspace / "observation.png"
+                    result = client.call("screenshot", {"simulatorUuid": udid, "outputPath": str(screenshot)})
+                    metadata = structured(result)
+                    require(metadata.get("device") == udid and metadata.get("width", 0) > 0
+                            and metadata.get("height", 0) > 0, "Missing screenshot dimensions/device")
+                    images = [item for item in result.get("content", []) if item.get("type") == "image"]
+                    require(len(images) == 1 and images[0].get("mimeType") == "image/png", "Missing native MCP image")
+                    image_bytes = base64.b64decode(images[0]["data"], validate=True)
+                    require(image_bytes.startswith(b"\x89PNG\r\n\x1a\n") and image_bytes == screenshot.read_bytes(), "Image does not match captured PNG")
+                    ok("live read-only UI and native screenshot")
 
-        # device_boot already booted device should be ok-ish / may error if already booted
-        resp = c.call_tool("device_boot", {"udid": UDID})
-        ok, detail = tool_ok(resp)
-        if not ok and ("already" in detail.lower() or "booted" in detail.lower() or "current state" in detail.lower()):
-            record("tool:device_boot", True, f"already booted tolerated: {detail[:160]}")
-        else:
-            record("tool:device_boot", ok, detail)
-
-        # ---- UI inspect ----
-        for name, args in [
-            ("ui_describe", {}),
-            ("ui_summary", {}),
-            ("ui_find", {"by": "label", "query": "PennyWise"}),
-            ("ui_search", {"query": "Sign"}),
-            ("ui_point", {"x": 201, "y": 700}),
-            ("ui_check_interrupt", {}),
-        ]:
-            ok, detail = tool_ok(c.call_tool(name, args))
-            record(f"tool:{name}", ok, detail)
-
-        # Ensure we're in an app with UI — launch PennyWise if on springboard
-        summary = c.call_tool("ui_summary", {})
-        sc = (summary.get("result") or {}).get("structuredContent") or {}
-        labels = [x.get("label") for x in sc.get("summary") or []]
-        # ui_summary should expose interrupt preview fields
-        if "hasInterrupt" in sc:
-            record("tool:ui_summary:hasInterrupt_field", True, f"hasInterrupt={sc.get('hasInterrupt')}")
-        else:
-            record("tool:ui_summary:hasInterrupt_field", False, "missing hasInterrupt on ui_summary")
-
-        check = c.call_tool("ui_check_interrupt", {})
-        check_sc = (check.get("result") or {}).get("structuredContent") or {}
-        if check_sc.get("hasInterrupt"):
-            kinds = [i.get("kind") for i in (check_sc.get("interrupts") or [])]
-            record("tool:ui_check_interrupt:detected", True, f"kinds={kinds}")
-            # Exercise dismiss when a non-springboard dialog is present
-            for i, intr in enumerate(check_sc.get("interrupts") or []):
-                if intr.get("kind") == "springboard":
-                    continue
-                btns = [b.get("label", "") for b in (intr.get("buttons") or [])]
-                action = "dismiss"
-                if any("don't allow" in b.lower() or "dont allow" in b.lower() or b.lower() == "cancel" for b in btns):
-                    action = "decline"
-                elif any("allow" in b.lower() or b.lower() == "ok" for b in btns):
-                    action = "dismiss"
-                ok, detail = tool_ok(c.call_tool("ui_dismiss_interrupt", {"action": action, "index": i}))
-                record(f"tool:ui_dismiss_interrupt:{action}", ok, detail)
-                time.sleep(0.5)
-                break
-            else:
-                record("tool:ui_dismiss_interrupt:skip", True, "only springboard or no buttons")
-        else:
-            record("tool:ui_check_interrupt:clear", True, "no interrupt")
-            # No-op dismiss path should succeed with dismissed=false
-            ok, detail = tool_ok(c.call_tool("ui_dismiss_interrupt", {"action": "dismiss"}))
-            record("tool:ui_dismiss_interrupt:noop", ok, detail)
-
-        if "PennyWise" in labels and "Safari" in labels:
-            # springboard — open PennyWise
-            ok, detail = tool_ok(c.call_tool("gesture", {"gesture": "tap", "target": {"label": "PennyWise"}}))
-            record("tool:gesture:open_pennywise", ok, detail)
-            time.sleep(1.2)
-        elif "Create Account" in labels or "Sign In" in labels or "Welcome to" in labels:
-            record("tool:gesture:open_pennywise", True, "already in PennyWise")
-        else:
-            # try openurl / launch
-            ok, detail = tool_ok(c.call_tool("app_launch", {"bundleId": "com.ezrablack.PennyWise"}))
-            if not ok:
-                # try common ids
-                for bid in [
-                    "com.pennywise.ios",
-                    "com.pennywise.app",
-                    "com.ezra.PennyWise",
-                    "EzraBlack.PennyWise",
-                ]:
-                    ok, detail = tool_ok(c.call_tool("app_launch", {"bundleId": bid}))
-                    if ok:
-                        break
-            record("tool:app_launch:pennywise", ok, detail)
-            time.sleep(1.0)
-
-        # Ensure app_launch is always exercised for tool coverage + interrupt attach
-        ok, detail = tool_ok(c.call_tool("app_launch", {"bundleId": "com.pennywise.ios"}))
-        record("tool:app_launch", ok, detail)
-        time.sleep(0.5)
-
-        # Post-launch interrupt check
-        ok, detail = tool_ok(c.call_tool("ui_check_interrupt", {}))
-        record("tool:ui_check_interrupt:post_launch", ok, detail)
-
-        # ---- Input ----
-        # Prefer Sign In flow if present
-        find = c.call_tool("ui_find", {"by": "label", "query": "Sign In"})
-        find_sc = (find.get("result") or {}).get("structuredContent") or {}
-        if find_sc.get("count", 0) > 0:
-            ok, detail = tool_ok(
-                c.call_tool("gesture", {"gesture": "tap", "target": {"label": "Sign In"}})
-            )
-            record("tool:gesture:tap_signin", ok, detail)
-            time.sleep(1.0)
-
-        for name, args in [
-            ("tap", {"x": 201, "y": 520}),
-            ("type_text", {"text": "mcp_test"}),
-            ("swipe", {"direction": "down", "distance": "short"}),
-            ("long_press", {"x": 201, "y": 400, "duration": 0.4}),
-            ("button", {"buttonType": "home"}),
-        ]:
-            # home last — will leave app; do others first except we already may have home later
-            if name == "button":
-                continue
-            ok, detail = tool_ok(c.call_tool(name, args))
-            record(f"tool:{name}", ok, detail)
-            time.sleep(0.3)
-
-        # key_press / key_sequence — best effort
-        ok, detail = tool_ok(c.call_tool("key_press", {"keyCode": 40}))  # return-ish
-        record("tool:key_press", ok, detail)
-        ok, detail = tool_ok(c.call_tool("key_sequence", {"keys": [4, 5], "delayMs": 50}))
-        record("tool:key_sequence", ok, detail)
-
-        # gesture presets / scroll
-        # Re-open app if needed after interactions
-        ok, detail = tool_ok(c.call_tool("gesture", {"preset": "scroll-up"}))
-        record("tool:gesture:preset_scroll_up", ok, detail)
-
-        # ---- Capture ----
-        shot = str(SHOT_DIR / "full_suite.png")
-        ok, detail = tool_ok(c.call_tool("screenshot", {"outputPath": shot}))
-        record("tool:screenshot", ok and Path(shot).exists(), detail)
-
-        ok, detail = tool_ok(
-            c.call_tool(
-                "record_start",
-                {"outputPath": str(SHOT_DIR / "clip.mp4")},
-            )
-        )
-        record("tool:record_start", ok, detail)
-        time.sleep(1.0)
-        ok, detail = tool_ok(c.call_tool("record_stop", {}))
-        record("tool:record_stop", ok, detail)
-
-        ok, detail = tool_ok(c.call_tool("start_sim_log_cap", {"timeout": 5}))
-        record("tool:start_sim_log_cap", ok, detail)
-        pid = None
-        sc = ((c.call_tool("status", {}).get("result") or {}).get("structuredContent"))
-        # get pid from previous start result — call again carefully
-        start_resp = None
-        # We already called; re-stop any
-        ok, detail = tool_ok(c.call_tool("stop_sim_log_cap", {}))
-        record("tool:stop_sim_log_cap", ok, detail)
-
-        # ---- App / URL ----
-        # open_url to settings-ish about blank
-        ok, detail = tool_ok(c.call_tool("open_url", {"url": "https://example.com"}))
-        record("tool:open_url", ok, detail)
-        time.sleep(0.8)
-
-        # terminate safari/example if launched — best effort
-        ok, detail = tool_ok(c.call_tool("app_terminate", {"bundleId": "com.apple.mobilesafari"}))
-        record("tool:app_terminate", ok or "not running" in detail.lower() or "failed" in detail.lower(), detail)
-
-        # app_install with missing path should fail cleanly
-        ok, detail = expect_error(c.call_tool("app_install", {"appPath": "/tmp/does-not-exist.app"}))
-        record("tool:app_install:missing", ok, detail)
-
-        # ---- Session / project ----
-        ok, detail = tool_ok(
-            c.call_tool(
-                "session_set_defaults",
-                {
-                    "projectPath": PROJECT,
-                    "scheme": SCHEME,
-                    "configuration": "Debug",
-                    "simulatorUdid": UDID,
-                    "simulatorName": "iPhone 17 Pro",
-                },
-            )
-        )
-        record("tool:session_set_defaults", ok, detail)
-        ok, detail = tool_ok(c.call_tool("session_show_defaults", {}))
-        record("tool:session_show_defaults", ok, detail)
-
-        ok, detail = tool_ok(c.call_tool("discover_projects", {"root": "/Users/ezrablack/Developer/Pennywise"}))
-        record("tool:discover_projects", ok, detail)
-
-        ok, detail = tool_ok(c.call_tool("list_schemes", {"project": PROJECT}))
-        record("tool:list_schemes", ok, detail)
-
-        ok, detail = tool_ok(
-            c.call_tool(
-                "show_build_settings",
-                {"project": PROJECT, "scheme": SCHEME},
-                timeout_s=300,
-            )
-        )
-        record("tool:show_build_settings", ok, detail)
-
-        ok, detail = tool_ok(
-            c.call_tool("get_app_bundle_id", {"project": PROJECT, "scheme": SCHEME})
-        )
-        record("tool:get_app_bundle_id", ok, detail)
-        bundle_id = None
-        sc = ((c.call_tool("get_app_bundle_id", {"project": PROJECT, "scheme": SCHEME}).get("result") or {}).get("structuredContent") or {})
-        bundle_id = sc.get("bundleId")
-
-        if bundle_id:
-            ok, detail = tool_ok(c.call_tool("get_sim_app_path", {"bundleId": bundle_id}))
-            record("tool:get_sim_app_path", ok, detail)
-            ok, detail = tool_ok(c.call_tool("launch_app_logs_sim", {"bundleId": bundle_id}))
-            record("tool:launch_app_logs_sim", ok, detail)
-        else:
-            record("tool:get_sim_app_path", False, "no bundle id")
-            record("tool:launch_app_logs_sim", False, "no bundle id")
-
-        # Build — can take a while
-        print("... running build_sim (may take a while)")
-        ok, detail = tool_ok(
-            c.call_tool(
-                "build_sim",
-                {
-                    "project": PROJECT,
-                    "scheme": SCHEME,
-                    "destination": f"platform=iOS Simulator,id={UDID}",
-                },
-                timeout_s=600,
-            )
-        )
-        record("tool:build_sim", ok, detail)
-
-        # clean is destructive-ish but ok
-        print("... running clean")
-        ok, detail = tool_ok(
-            c.call_tool("clean", {"project": PROJECT, "scheme": SCHEME}, timeout_s=300)
-        )
-        record("tool:clean", ok, detail)
-
-        # test_sim can be very long — run but allow fail if no tests / timeout
-        print("... running test_sim (may take a while)")
-        resp = c.call_tool(
-            "test_sim",
-            {
-                "project": PROJECT,
-                "scheme": SCHEME,
-                "destination": f"platform=iOS Simulator,id={UDID}",
-            },
-            timeout_s=600,
-        )
-        ok, detail = tool_ok(resp)
-        record("tool:test_sim", ok, detail)
-
-        # build_run_sim
-        print("... running build_run_sim")
-        ok, detail = tool_ok(
-            c.call_tool(
-                "build_run_sim",
-                {
-                    "project": PROJECT,
-                    "scheme": SCHEME,
-                    "destination": f"platform=iOS Simulator,id={UDID}",
-                },
-                timeout_s=600,
-            )
-        )
-        record("tool:build_run_sim", ok, detail)
-
-        # ---- Xcode bridge tools: expect graceful failure on 26.2 ----
-        for name, args in [
-            ("xcode_windows", {}),
-            ("xcode_issues", {}),
-            ("xcode_build_log", {}),
-            ("xcode_preview", {"filePath": "ContentView.swift"}),
-            ("docs_search", {"query": "SwiftUI List"}),
-            ("swift_snippet", {"code": "print(1+1)"}),
-            ("run_some_tests", {"tests": ["DummyTests/testA"]}),
-        ]:
-            ok, detail = expect_error(c.call_tool(name, args, timeout_s=30))
-            record(f"tool:{name}:bridge_absent", ok, detail)
-
-        # session clear
-        ok, detail = tool_ok(c.call_tool("session_clear_defaults", {"keys": ["tabIdentifier"]}))
-        record("tool:session_clear_defaults", ok, detail)
-
-        # device_shutdown NOT run (keep user's simulator up) — validate arg error instead
-        ok, detail = expect_error(c.call_tool("device_shutdown", {"udid": "INVALID-UDID-FOR-TEST"}))
-        record("tool:device_shutdown:invalid", ok, detail)
-
-        # button at end to leave simulator usable
-        ok, detail = tool_ok(c.call_tool("button", {"buttonType": "home"}))
-        record("tool:button:home", ok, detail)
-
-        # Ensure every registered tool was covered somehow
-        covered = set()
-        for name, _, _ in results:
-            if name.startswith("tool:"):
-                base = name.split(":")[1]
-                covered.add(base)
-        # map aliases
-        aliases = {
-            "gesture": "gesture",
-            "open_pennywise": "gesture",
-            "tap_signin": "gesture",
-            "preset_scroll_up": "gesture",
-            "missing": "app_install",
-            "invalid": "device_shutdown",
-            "home": "button",
-            "bridge_absent": None,
-            "pennywise": "app_launch",
-        }
-        missing = []
-        for t in tool_names:
-            if t in covered:
-                continue
-            # check prefix coverage
-            if any(n.startswith(f"tool:{t}") for n, _, _ in results):
-                continue
-            missing.append(t)
-        record("coverage:all_tools", len(missing) == 0, f"missing={missing}")
-
-    finally:
-        c.close()
-
-    passed = sum(1 for _, ok, _ in results if ok)
-    failed = sum(1 for _, ok, _ in results if not ok)
-    print("\n==== SUMMARY ====")
-    print(f"passed={passed} failed={failed} total={len(results)}")
-    if failed:
-        print("\nFailures:")
-        for name, ok, detail in results:
-            if not ok:
-                print(f"  - {name}: {detail}")
-    out = SHOT_DIR / "results.json"
-    out.write_text(json.dumps([{"name": n, "ok": ok, "detail": d} for n, ok, d in results], indent=2))
-    print(f"wrote {out}")
-    return 1 if failed else 0
+            filters = ["core", "ui,input", *sorted(set(catalog.values()))]
+            for workflow_filter in dict.fromkeys(filters):
+                filtered_env = dict(env, XCAUTOKIT_WORKFLOWS=workflow_filter)
+                expected = set(cli_catalog(binary, filtered_env, args.timeout))
+                with MCPClient(binary, filtered_env, args.timeout) as client:
+                    client.initialize()
+                    actual = {item["name"] for item in client.list_items("tools/list", "tools")}
+                require(actual == expected, f"Filter {workflow_filter}: CLI/MCP mismatch {sorted(actual ^ expected)}")
+                if workflow_filter in set(catalog.values()):
+                    require(any(catalog[name] == workflow_filter for name in actual), f"Empty requested category: {workflow_filter}")
+                ok(f"workflow filter agrees with CLI: {workflow_filter}")
+    except (AssertionError, OSError, ValueError, TimeoutError, EOFError, subprocess.SubprocessError) as exc:
+        print(f"[FAIL] {exc}", file=sys.stderr)
+        return 1
+    print(f"\n{passed} checks passed ({'read-only simulator + protocol' if args.simulator else 'protocol only'}).")
+    return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())

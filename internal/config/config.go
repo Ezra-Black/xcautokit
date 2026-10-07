@@ -5,13 +5,13 @@ import (
 	"path/filepath"
 )
 
-const Version = "1.1.0"
+const Version = "2.0.0"
 
 type Config struct {
-	DeviceUDID    string
-	RecordingDir  string
-	ScreenshotDir string
-	RecordingCodec string
+	DeviceUDID       string
+	RecordingDir     string
+	ScreenshotDir    string
+	RecordingCodec   string
 	ScreenshotFormat string
 }
 
@@ -24,7 +24,5 @@ func Default() Config {
 		RecordingCodec:   "hevc",
 		ScreenshotFormat: "png",
 	}
-	_ = os.MkdirAll(cfg.RecordingDir, 0755)
-	_ = os.MkdirAll(cfg.ScreenshotDir, 0755)
 	return cfg
 }

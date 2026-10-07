@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"os"
 	"strings"
 	"time"
@@ -33,37 +34,61 @@ Tickets live only in this MCP process — if the server restarts, start a new ca
 
 ## Session defaults
 
-session_set_defaults stores project/scheme/udid under ~/.xcautokit for convenience across tool calls. Prefer explicit args when unsure.
+Defaults are isolated to this MCP process. XCAUTOKIT_SESSION_FILE opts into a dedicated persistent file. Prefer explicit simulatorUuid for host subagents.
+
+## Host-owned agents
+
+The host owns all planning, models, and subagents. XCAutokit never starts agents or calls a model.
+Use device_claim for one driver per simulator; pass leaseToken to mutations and release when done. Other agents can analyze captured evidence or drive separate UUIDs. Locks coordinate UUID-targeted XCAutokit tools; external simulator tools and live IDE run_some_tests/swift_snippet follow their own destinations and are outside that lock. Do not run their mutations alongside a simulator driver.
+Prefer ui_act with a selector and waitFor over find/tap/sleep/check. Use ui_wait for observed conditions.
+workflow_run executes only host-supplied steps and stops on failure; workflow_save saves a successful run for replay. Inspect evidence and expected conditions before claiming completion.
 
 ## Optional tool filtering
 
 Set XCAUTOKIT_WORKFLOWS=core to omit live Xcode tools, or a comma list such as device,ui,input,build.
 `
 
-func (a *App) checkInterrupts(udid string) (has bool, interrupts []sim.Interrupt) {
-	raw, err := sim.DescribeUI(udid)
+func (a *App) checkInterrupts(ctx context.Context, udid string) (interrupts []sim.Interrupt, err error) {
+	raw, err := sim.DescribeUIContext(ctx, udid)
 	if err != nil {
-		return false, nil
+		return nil, err
 	}
 	els, err := sim.ParseDescribeUI(raw)
 	if err != nil {
-		return false, nil
+		return nil, err
 	}
 	interrupts = sim.DetectInterrupts(els)
-	return len(interrupts) > 0, interrupts
+	return interrupts, nil
 }
 
 // attachInterrupts adds interrupt snapshot fields to a tool result map.
-func (a *App) attachInterrupts(udid string, out map[string]any) {
+func (a *App) attachInterrupts(ctx context.Context, udid string, out map[string]any) {
 	if out == nil {
 		return
 	}
 	// Brief settle so system dialogs can appear after launch.
-	time.Sleep(350 * time.Millisecond)
-	has, interrupts := a.checkInterrupts(udid)
-	out["hasInterrupt"] = has
+	timer := time.NewTimer(150 * time.Millisecond)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		out["interruptCheck"] = "unavailable"
+		out["interruptError"] = ctx.Err().Error()
+		out["hasInterrupt"] = nil
+		return
+	case <-timer.C:
+	}
+	interrupts, err := a.checkInterrupts(ctx, udid)
+	if err != nil {
+		out["interruptCheck"] = "unavailable"
+		out["interruptError"] = err.Error()
+		out["hasInterrupt"] = nil
+		out["interruptHint"] = "UI inspection failed. Use ui_check_interrupt before UI input; do not assume the screen is clear."
+		return
+	}
+	out["interruptCheck"] = "complete"
+	out["hasInterrupt"] = len(interrupts) > 0
 	out["interrupts"] = interrupts
-	if has {
+	if len(interrupts) > 0 {
 		out["interruptHint"] = "Blocking overlay detected. Call ui_dismiss_interrupt with explicit action before UI input. Never auto-accept permissions."
 	}
 }
@@ -87,13 +112,29 @@ func interruptStrictOff() bool {
 
 // guardInputBlocks returns a result map if input should be refused due to overlays.
 func (a *App) guardInputBlocks(udid string) map[string]any {
+	return a.guardInputBlocksContext(context.Background(), udid)
+}
+
+func (a *App) guardInputBlocksContext(ctx context.Context, udid string) map[string]any {
 	if interruptStrictOff() {
 		return nil
 	}
-	has, interrupts := a.checkInterrupts(udid)
-	if !has {
+	raw, err := sim.DescribeUIContext(ctx, udid)
+	var els []sim.Element
+	if err == nil {
+		els, err = sim.ParseDescribeUI(raw)
+	}
+	return inputBlockFromSnapshot(udid, els, err)
+}
+
+func inputBlockFromSnapshot(udid string, els []sim.Element, err error) map[string]any {
+	if interruptStrictOff() {
 		return nil
 	}
+	if err != nil {
+		return map[string]any{"success": false, "performed": false, "blocked": true, "reason": "ui_unavailable", "device": udid, "message": err.Error(), "nextTool": "ui_describe"}
+	}
+	interrupts := sim.DetectInterrupts(els)
 	blocking := blockingInterrupts(interrupts)
 	if len(blocking) == 0 {
 		// SpringBoard-only: warn but allow (tapping icons is valid).
@@ -101,6 +142,7 @@ func (a *App) guardInputBlocks(udid string) map[string]any {
 	}
 	return map[string]any{
 		"success":      false,
+		"performed":    false,
 		"blocked":      true,
 		"reason":       "blocking_interrupt",
 		"hasInterrupt": true,

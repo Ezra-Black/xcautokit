@@ -20,7 +20,7 @@ func parseWorkflows(raw string) workflowSet {
 	if raw == "core" {
 		return workflowSet{
 			"device": true, "ui": true, "input": true, "app": true,
-			"capture": true, "project": true, "build": true, "session": true,
+			"capture": true, "project": true, "build": true, "session": true, "coordination": true, "workflow": true,
 		}
 	}
 	out := workflowSet{}
@@ -30,6 +30,9 @@ func parseWorkflows(raw string) workflowSet {
 			continue
 		}
 		out[p] = true
+		if p == "ui" || p == "input" || p == "app" || p == "build" || p == "device" || p == "workflow" {
+			out["coordination"] = true
+		}
 		// session tools live with project registration
 		if p == "project" {
 			out["session"] = true

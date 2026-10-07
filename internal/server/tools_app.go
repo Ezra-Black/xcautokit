@@ -3,8 +3,8 @@ package server
 import (
 	"context"
 
-	"github.com/xcautokit/xcautokit/internal/sim"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/xcautokit/xcautokit/internal/sim"
 )
 
 type appInstallIn struct {
@@ -23,63 +23,63 @@ type openURLIn struct {
 }
 
 func (a *App) registerAppTools(srv *mcp.Server) {
-	mcp.AddTool(srv, toolMeta("app_install", "Install App", "Install .app bundle", annWrite()), func(ctx context.Context, req *mcp.CallToolRequest, in appInstallIn) (*mcp.CallToolResult, map[string]any, error) {
+	addTool(a, srv, toolMeta("app_install", "Install App", "Install .app bundle", annWrite()), func(ctx context.Context, req *mcp.CallToolRequest, in appInstallIn) (*mcp.CallToolResult, map[string]any, error) {
 		if in.AppPath == "" {
 			return nil, nil, fmtError("appPath parameter required")
 		}
-		udid, err := a.resolveUDID(in.SimulatorUuid)
+		udid, err := a.resolveUDIDContext(ctx, in.SimulatorUuid)
 		if err != nil {
 			return nil, nil, err
 		}
-		if _, err := sim.RunSimctl("install", udid, in.AppPath); err != nil {
+		if _, err := sim.RunSimctlContext(ctx, "install", udid, in.AppPath); err != nil {
 			return nil, nil, err
 		}
 		return nil, map[string]any{"success": true, "appPath": in.AppPath, "device": udid}, nil
 	})
 
-	mcp.AddTool(srv, toolMeta("app_launch", "Launch App", "Launch app by bundle ID. Response includes hasInterrupt/interrupts — dismiss overlays before UI input.", annWrite()), func(ctx context.Context, req *mcp.CallToolRequest, in appBundleIn) (*mcp.CallToolResult, map[string]any, error) {
+	addTool(a, srv, toolMeta("app_launch", "Launch App", "Launch app by bundle ID. Response includes hasInterrupt/interrupts — dismiss overlays before UI input.", annWrite()), func(ctx context.Context, req *mcp.CallToolRequest, in appBundleIn) (*mcp.CallToolResult, map[string]any, error) {
 		if in.BundleId == "" {
 			return nil, nil, fmtError("bundleId parameter required")
 		}
-		udid, err := a.resolveUDID(in.SimulatorUuid)
+		udid, err := a.resolveUDIDContext(ctx, in.SimulatorUuid)
 		if err != nil {
 			return nil, nil, err
 		}
-		if _, err := sim.RunSimctl("launch", udid, in.BundleId); err != nil {
+		if _, err := sim.RunSimctlContext(ctx, "launch", udid, in.BundleId); err != nil {
 			return nil, nil, err
 		}
 		out := map[string]any{"success": true, "bundleId": in.BundleId, "device": udid}
-		a.attachInterrupts(udid, out)
+		a.attachInterrupts(ctx, udid, out)
 		return nil, out, nil
 	})
 
-	mcp.AddTool(srv, toolMeta("app_terminate", "Terminate App", "Terminate running app", annDestructive()), func(ctx context.Context, req *mcp.CallToolRequest, in appBundleIn) (*mcp.CallToolResult, map[string]any, error) {
+	addTool(a, srv, toolMeta("app_terminate", "Terminate App", "Terminate running app", annDestructive()), func(ctx context.Context, req *mcp.CallToolRequest, in appBundleIn) (*mcp.CallToolResult, map[string]any, error) {
 		if in.BundleId == "" {
 			return nil, nil, fmtError("bundleId parameter required")
 		}
-		udid, err := a.resolveUDID(in.SimulatorUuid)
+		udid, err := a.resolveUDIDContext(ctx, in.SimulatorUuid)
 		if err != nil {
 			return nil, nil, err
 		}
-		if _, err := sim.RunSimctl("terminate", udid, in.BundleId); err != nil {
+		if _, err := sim.RunSimctlContext(ctx, "terminate", udid, in.BundleId); err != nil {
 			return nil, nil, err
 		}
 		return nil, map[string]any{"success": true, "bundleId": in.BundleId, "device": udid}, nil
 	})
 
-	mcp.AddTool(srv, toolMeta("open_url", "Open URL", "Open URL scheme. Response includes hasInterrupt/interrupts when system dialogs appear.", annWrite()), func(ctx context.Context, req *mcp.CallToolRequest, in openURLIn) (*mcp.CallToolResult, map[string]any, error) {
+	addTool(a, srv, toolMeta("open_url", "Open URL", "Open URL scheme. Response includes hasInterrupt/interrupts when system dialogs appear.", annWrite()), func(ctx context.Context, req *mcp.CallToolRequest, in openURLIn) (*mcp.CallToolResult, map[string]any, error) {
 		if in.URL == "" {
 			return nil, nil, fmtError("url parameter required")
 		}
-		udid, err := a.resolveUDID(in.SimulatorUuid)
+		udid, err := a.resolveUDIDContext(ctx, in.SimulatorUuid)
 		if err != nil {
 			return nil, nil, err
 		}
-		if _, err := sim.RunSimctl("openurl", udid, in.URL); err != nil {
+		if _, err := sim.RunSimctlContext(ctx, "openurl", udid, in.URL); err != nil {
 			return nil, nil, err
 		}
 		out := map[string]any{"success": true, "url": in.URL, "device": udid}
-		a.attachInterrupts(udid, out)
+		a.attachInterrupts(ctx, udid, out)
 		return nil, out, nil
 	})
 }

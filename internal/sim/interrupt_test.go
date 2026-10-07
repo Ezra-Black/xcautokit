@@ -211,3 +211,13 @@ func TestDetectFlatPermissionCurlyApostrophe(t *testing.T) {
 		t.Fatalf("decline=%q", btn.Label)
 	}
 }
+
+func TestOrdinaryNotificationSettingsAreNotInterrupts(t *testing.T) {
+	raw := `[{"type":"Application","label":"Settings","children":[{"type":"Button","label":"Notifications","frame":{"x":20,"y":100,"width":200,"height":44}},{"type":"Button","label":"Continue","frame":{"x":20,"y":200,"width":200,"height":44}},{"type":"Button","label":"Cancel","frame":{"x":20,"y":300,"width":200,"height":44}}]}]`
+	if got := DetectInterrupts(parseFixture(t, raw)); len(got) != 0 { t.Fatalf("ordinary screen blocked: %+v", got) }
+}
+
+func TestDismissDoesNotGrantSingleButtonPermission(t *testing.T) {
+	intr := Interrupt{Kind:KindPermission, Buttons:[]InterruptButton{{Label:"Allow"}}}
+	if _,err := PickInterruptButton(intr,"dismiss","");err==nil { t.Fatal("dismiss silently granted permission") }
+}

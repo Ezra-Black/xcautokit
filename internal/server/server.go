@@ -2,12 +2,15 @@ package server
 
 import (
 	"context"
+	"errors"
+	"path/filepath"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/xcautokit/xcautokit/internal/config"
+	"github.com/xcautokit/xcautokit/internal/devicelease"
 	"github.com/xcautokit/xcautokit/internal/session"
 	"github.com/xcautokit/xcautokit/internal/ticket"
 	"github.com/xcautokit/xcautokit/internal/xcodebridge"
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 type App struct {
@@ -15,6 +18,7 @@ type App struct {
 	Session *session.Store
 	Bridge  *xcodebridge.Client
 	Tickets *ticket.Store
+	Leases  *devicelease.Store
 }
 
 func New() *App {
@@ -23,6 +27,7 @@ func New() *App {
 		Session: session.New(),
 		Bridge:  xcodebridge.New(xcodebridge.ModeFromEnv()),
 		Tickets: ticket.New(),
+		Leases:  devicelease.New(filepath.Join(stateDir(), "locks")),
 	}
 }
 
@@ -34,6 +39,8 @@ func (a *App) Server() *mcp.Server {
 		Instructions: AgentInstructions,
 	})
 	wf := workflowsFromEnv()
+	a.registerCoordinationTools(srv)
+	a.registerWorkflowTools(srv)
 	a.registerResources(srv)
 	a.registerPrompts(srv)
 	if wf.enabled("device") {
@@ -44,6 +51,7 @@ func (a *App) Server() *mcp.Server {
 	}
 	if wf.enabled("ui") {
 		a.registerUITools(srv)
+		a.registerUIWorkflowTools(srv)
 	}
 	if wf.enabled("app") {
 		a.registerAppTools(srv)
@@ -61,7 +69,7 @@ func (a *App) Server() *mcp.Server {
 }
 
 func (a *App) Close() error {
-	return a.Bridge.Close()
+	return errors.Join(a.Bridge.Close(), a.Tickets.Close(), a.Leases.Close())
 }
 
 func (a *App) Run(ctx context.Context) error {

@@ -1,0 +1,25 @@
+Reference: xcautokit-2-launch-v1.png
+
+Use case: style-transfer / ads-marketing.
+Redesign the attached XCAutokit launch graphic completely. Keep the factual metrics, product name, install command and npm URL accurate, but replace the visual treatment with a clean, simple, regal editorial announcement.
+
+Art direction: the restraint and confidence of Anthropic/Claude launch announcements, interpreted as an original XCAutokit design. Warm ivory background (#F4F1E9), deep near-black ink (#242320), tiny muted oxblood accent (#632F35). Flat print design, no texture. A sophisticated large bookish serif title, refined regular-weight serif numerals, quiet neutral sans-serif supporting labels, small precise monospace command. Lots of open space, generous 8% margins, rigorous alignment. Landscape 16:9, high resolution, entirely readable on a social feed. The result should feel like the cover of a beautifully typeset technology journal.
+
+Composition: a small flat original X monogram centered at the top in oxblood, no badge, no box, no ornament. Centered large serif title: "XCAutokit 2.0". One understated subtitle: "Xcode + iOS Simulator MCP". An airy, centered row of three unboxed statistics across the middle; no cards, no containers, no icons, no vertical dividers:
+"75%" / "fewer tool calls" / "4 → 1"
+"~38%" / "less local execution time" / "2.01s → 1.26s"
+"~40%" / "smaller JSON responses"
+
+Small but legible centered benchmark note directly below the statistics, set over two lines:
+"Batched vs separate calls · 3-run local fixture medians"
+"Host/model time excluded"
+
+Then generous whitespace and one fine horizontal hairline above a restrained footer.
+Footer main line, clear and fairly prominent monospace:
+"npm install -g xcautokit@latest"
+Footer second line, smaller:
+"npmjs.com/package/xcautokit"
+
+Use only this exact text, nothing else. Do not include the previous feature row or any slogans. Remove ALL previous tech ornament: glow, gradients, 3D, bevels, shadows, phones, simulator windows, grids, terminal boxes, shields, chains, arrows as decorative objects, oversized dashboard panels, flashy branding. No crown, gold, crest, Claude logo or Anthropic wordmark. Regal means proportion, fine typography and restraint. Background must remain flat warm ivory edge to edge, no image of a piece of paper. This is the final shareable image, not a photographed mockup.
+
+Benchmark source: testdata/SimulatorFixture/VALIDATION.md

@@ -38,7 +38,7 @@ type runSomeTestsIn struct {
 }
 
 func (a *App) registerXcodeTools(srv *mcp.Server) {
-	mcp.AddTool(srv, toolMeta("xcode_windows", "Xcode Windows", "List open Xcode windows/tabs via mcpbridge (requires Xcode 26.3+ with external agents enabled)", annRO()), func(ctx context.Context, req *mcp.CallToolRequest, in emptyIn) (*mcp.CallToolResult, map[string]any, error) {
+	addTool(a, srv, toolMeta("xcode_windows", "Xcode Windows", "List open Xcode windows/tabs via mcpbridge (requires Xcode 26.3+ with external agents enabled)", annRO()), func(ctx context.Context, req *mcp.CallToolRequest, in emptyIn) (*mcp.CallToolResult, map[string]any, error) {
 		if !a.Bridge.Enabled() {
 			st := a.Bridge.Status(ctx)
 			return nil, map[string]any{"available": false, "status": st}, fmtError(st.Message + "; " + st.Error)
@@ -57,7 +57,7 @@ func (a *App) registerXcodeTools(srv *mcp.Server) {
 		}, nil
 	})
 
-	mcp.AddTool(srv, toolMeta("xcode_issues", "Xcode Issues", "Get Issue Navigator diagnostics from live Xcode (mcpbridge)", annRO()), func(ctx context.Context, req *mcp.CallToolRequest, in issuesIn) (*mcp.CallToolResult, map[string]any, error) {
+	addTool(a, srv, toolMeta("xcode_issues", "Xcode Issues", "Get Issue Navigator diagnostics from live Xcode (mcpbridge)", annRO()), func(ctx context.Context, req *mcp.CallToolRequest, in issuesIn) (*mcp.CallToolResult, map[string]any, error) {
 		if !a.Bridge.Enabled() {
 			return nil, nil, fmtError("Xcode mcpbridge unavailable (need Xcode 26.3+)")
 		}
@@ -76,7 +76,7 @@ func (a *App) registerXcodeTools(srv *mcp.Server) {
 		return nil, out, nil
 	})
 
-	mcp.AddTool(srv, toolMeta("xcode_build_log", "Xcode Build Log", "Fetch Xcode build log via mcpbridge", annRO()), func(ctx context.Context, req *mcp.CallToolRequest, in buildLogIn) (*mcp.CallToolResult, map[string]any, error) {
+	addTool(a, srv, toolMeta("xcode_build_log", "Xcode Build Log", "Fetch Xcode build log via mcpbridge", annRO()), func(ctx context.Context, req *mcp.CallToolRequest, in buildLogIn) (*mcp.CallToolResult, map[string]any, error) {
 		if !a.Bridge.Enabled() {
 			return nil, nil, fmtError("Xcode mcpbridge unavailable (need Xcode 26.3+)")
 		}
@@ -95,7 +95,7 @@ func (a *App) registerXcodeTools(srv *mcp.Server) {
 		return nil, out, nil
 	})
 
-	mcp.AddTool(srv, toolMeta("xcode_preview", "Xcode Preview", "Render a SwiftUI preview via Xcode mcpbridge", annRO()), func(ctx context.Context, req *mcp.CallToolRequest, in previewIn) (*mcp.CallToolResult, map[string]any, error) {
+	addTool(a, srv, toolMeta("xcode_preview", "Xcode Preview", "Render a SwiftUI preview via Xcode mcpbridge", annRO()), func(ctx context.Context, req *mcp.CallToolRequest, in previewIn) (*mcp.CallToolResult, map[string]any, error) {
 		if in.FilePath == "" {
 			return nil, nil, fmtError("filePath required")
 		}
@@ -117,7 +117,7 @@ func (a *App) registerXcodeTools(srv *mcp.Server) {
 		return nil, out, nil
 	})
 
-	mcp.AddTool(srv, toolMeta("docs_search", "Docs Search", "Search Apple Developer Documentation / WWDC via Xcode mcpbridge", annRO()), func(ctx context.Context, req *mcp.CallToolRequest, in docsIn) (*mcp.CallToolResult, map[string]any, error) {
+	addTool(a, srv, toolMeta("docs_search", "Docs Search", "Search Apple Developer Documentation / WWDC via Xcode mcpbridge", annRO()), func(ctx context.Context, req *mcp.CallToolRequest, in docsIn) (*mcp.CallToolResult, map[string]any, error) {
 		if in.Query == "" {
 			return nil, nil, fmtError("query required")
 		}
@@ -135,7 +135,7 @@ func (a *App) registerXcodeTools(srv *mcp.Server) {
 		return nil, out, nil
 	})
 
-	mcp.AddTool(srv, toolMeta("swift_snippet", "Swift Snippet", "Execute a Swift snippet in Xcode project context via mcpbridge", annWrite()), func(ctx context.Context, req *mcp.CallToolRequest, in snippetIn) (*mcp.CallToolResult, map[string]any, error) {
+	addTool(a, srv, toolMeta("swift_snippet", "Swift Snippet", "Execute a Swift snippet in Xcode project context via mcpbridge", annWrite()), func(ctx context.Context, req *mcp.CallToolRequest, in snippetIn) (*mcp.CallToolResult, map[string]any, error) {
 		if in.Code == "" {
 			return nil, nil, fmtError("code required")
 		}
@@ -157,7 +157,7 @@ func (a *App) registerXcodeTools(srv *mcp.Server) {
 		return nil, out, nil
 	})
 
-	mcp.AddTool(srv, toolMeta("run_some_tests", "Run Some Tests", "Run specific tests via Xcode mcpbridge (falls back unavailable message if bridge missing)", annWrite()), func(ctx context.Context, req *mcp.CallToolRequest, in runSomeTestsIn) (*mcp.CallToolResult, map[string]any, error) {
+	addTool(a, srv, toolMeta("run_some_tests", "Run Some Tests", "Run specific tests via Xcode mcpbridge (falls back unavailable message if bridge missing)", annWrite()), func(ctx context.Context, req *mcp.CallToolRequest, in runSomeTestsIn) (*mcp.CallToolResult, map[string]any, error) {
 		if len(in.Tests) == 0 {
 			return nil, nil, fmtError("tests required")
 		}

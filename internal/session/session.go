@@ -2,6 +2,7 @@ package session
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -19,62 +20,82 @@ type Defaults struct {
 }
 
 type Store struct {
-	mu   sync.RWMutex
-	path string
-	cur  Defaults
+	mu      sync.RWMutex
+	path    string
+	cur     Defaults
+	loadErr error
 }
 
+// New creates isolated defaults for this MCP process. Persistence is opt-in:
+// set XCAUTOKIT_SESSION_FILE to an explicit file dedicated to this agent/project.
 func New() *Store {
-	home, _ := os.UserHomeDir()
-	path := filepath.Join(home, ".xcautokit", "session_defaults.json")
-	_ = os.MkdirAll(filepath.Dir(path), 0755)
-	s := &Store{path: path}
-	_ = s.load()
+	s := &Store{path: os.Getenv("XCAUTOKIT_SESSION_FILE")}
+	if s.path != "" {
+		s.loadErr = s.load()
+	}
 	return s
+}
+
+func clone(d Defaults) Defaults {
+	if d.UseLatestOS != nil {
+		value := *d.UseLatestOS
+		d.UseLatestOS = &value
+	}
+	return d
 }
 
 func (s *Store) Get() Defaults {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.cur
+	return clone(s.cur)
 }
 
 func (s *Store) Set(patch Defaults) (Defaults, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.loadErr != nil {
+		return clone(s.cur), s.loadErr
+	}
+	next := clone(s.cur)
 	if patch.ProjectPath != "" {
-		s.cur.ProjectPath = patch.ProjectPath
+		next.ProjectPath = patch.ProjectPath
 	}
 	if patch.Scheme != "" {
-		s.cur.Scheme = patch.Scheme
+		next.Scheme = patch.Scheme
 	}
 	if patch.Configuration != "" {
-		s.cur.Configuration = patch.Configuration
+		next.Configuration = patch.Configuration
 	}
 	if patch.SimulatorUdid != "" {
-		s.cur.SimulatorUdid = patch.SimulatorUdid
+		next.SimulatorUdid = patch.SimulatorUdid
 	}
 	if patch.SimulatorName != "" {
-		s.cur.SimulatorName = patch.SimulatorName
+		next.SimulatorName = patch.SimulatorName
 	}
 	if patch.DerivedDataPath != "" {
-		s.cur.DerivedDataPath = patch.DerivedDataPath
+		next.DerivedDataPath = patch.DerivedDataPath
 	}
 	if patch.UseLatestOS != nil {
-		s.cur.UseLatestOS = patch.UseLatestOS
+		value := *patch.UseLatestOS
+		next.UseLatestOS = &value
 	}
 	if patch.TabIdentifier != "" {
-		s.cur.TabIdentifier = patch.TabIdentifier
+		next.TabIdentifier = patch.TabIdentifier
 	}
-	if err := s.saveLocked(); err != nil {
-		return s.cur, err
+	if err := s.saveLocked(next); err != nil {
+		return clone(s.cur), err
 	}
-	return s.cur, nil
+	s.cur = next
+	return clone(s.cur), nil
 }
 
 func (s *Store) Clear(keys []string) (Defaults, int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.loadErr != nil {
+		return clone(s.cur), 0, s.loadErr
+	}
+	next := clone(s.cur)
 	cleared := 0
 	clearAll := len(keys) == 0
 	clear := func(k string) bool {
@@ -88,45 +109,46 @@ func (s *Store) Clear(keys []string) (Defaults, int, error) {
 		}
 		return false
 	}
-	if clear("projectPath") && s.cur.ProjectPath != "" {
-		s.cur.ProjectPath = ""
+	if clear("projectPath") && next.ProjectPath != "" {
+		next.ProjectPath = ""
 		cleared++
 	}
-	if clear("scheme") && s.cur.Scheme != "" {
-		s.cur.Scheme = ""
+	if clear("scheme") && next.Scheme != "" {
+		next.Scheme = ""
 		cleared++
 	}
-	if clear("configuration") && s.cur.Configuration != "" {
-		s.cur.Configuration = ""
+	if clear("configuration") && next.Configuration != "" {
+		next.Configuration = ""
 		cleared++
 	}
-	if clear("simulatorUdid") && s.cur.SimulatorUdid != "" {
-		s.cur.SimulatorUdid = ""
+	if clear("simulatorUdid") && next.SimulatorUdid != "" {
+		next.SimulatorUdid = ""
 		cleared++
 	}
-	if clear("simulatorName") && s.cur.SimulatorName != "" {
-		s.cur.SimulatorName = ""
+	if clear("simulatorName") && next.SimulatorName != "" {
+		next.SimulatorName = ""
 		cleared++
 	}
-	if clear("derivedDataPath") && s.cur.DerivedDataPath != "" {
-		s.cur.DerivedDataPath = ""
+	if clear("derivedDataPath") && next.DerivedDataPath != "" {
+		next.DerivedDataPath = ""
 		cleared++
 	}
-	if clear("useLatestOS") && s.cur.UseLatestOS != nil {
-		s.cur.UseLatestOS = nil
+	if clear("useLatestOS") && next.UseLatestOS != nil {
+		next.UseLatestOS = nil
 		cleared++
 	}
-	if clear("tabIdentifier") && s.cur.TabIdentifier != "" {
-		s.cur.TabIdentifier = ""
+	if clear("tabIdentifier") && next.TabIdentifier != "" {
+		next.TabIdentifier = ""
 		cleared++
 	}
 	if clearAll {
-		s.cur = Defaults{}
+		next = Defaults{}
 	}
-	if err := s.saveLocked(); err != nil {
-		return s.cur, cleared, err
+	if err := s.saveLocked(next); err != nil {
+		return clone(s.cur), 0, err
 	}
-	return s.cur, cleared, nil
+	s.cur = next
+	return clone(s.cur), cleared, nil
 }
 
 func (s *Store) load() error {
@@ -137,13 +159,36 @@ func (s *Store) load() error {
 		}
 		return err
 	}
-	return json.Unmarshal(data, &s.cur)
+	var loaded Defaults
+	if err := json.Unmarshal(data, &loaded); err != nil {
+		return fmt.Errorf("load session defaults %s: %w", s.path, err)
+	}
+	s.cur = loaded
+	return nil
 }
 
-func (s *Store) saveLocked() error {
-	data, err := json.MarshalIndent(s.cur, "", "  ")
+func (s *Store) saveLocked(next Defaults) error {
+	if s.path == "" {
+		return nil
+	}
+	data, err := json.MarshalIndent(next, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(s.path, data, 0644)
+	if err := os.MkdirAll(filepath.Dir(s.path), 0700); err != nil {
+		return err
+	}
+	f, err := os.CreateTemp(filepath.Dir(s.path), ".session-*.json")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(f.Name())
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	return os.Rename(f.Name(), s.path)
 }

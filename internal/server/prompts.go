@@ -16,12 +16,12 @@ func (a *App) registerPrompts(srv *mcp.Server) {
 			Messages: []*mcp.PromptMessage{
 				{Role: "user", Content: &mcp.TextContent{Text: `Use XCAutokit only (no competitor Xcode MCPs).
 
-1. Read resource xcode://status. If mcpbridge is available, call xcode_windows and store tabIdentifier via session_set_defaults.
-2. session_show_defaults — if project/scheme missing, discover_projects then session_set_defaults.
-3. build_sim — XCAutokit routes to mcpbridge when available, else xcodebuild.
-4. On failure: xcode_issues or xcode_build_log (bridge) / inspect build_sim output (fallback).
-5. Fix code in the editor, rebuild.
-6. build_run_sim or app_launch, then ui_check_interrupt. If blocked, ui_dismiss_interrupt with an explicit action (accept/decline/dismiss) — never silently auto-accept permissions. Then ui_summary / screenshot to verify.`}},
+1. Inspect session defaults; discover_projects and list_schemes when project/scheme are missing. Defaults are isolated per MCP process.
+2. Select an explicit simulator from device_list. For host-agent coordination, device_claim it and pass leaseToken to mutations; other agents can review source/evidence or use separate devices.
+3. build_run_sim builds the requested project/scheme/configuration using xcodebuild, installs its matching artifact, and launches it on the selected simulator. Inspect built/installed/launched and stage on failure. Use build_sim when only compilation is requested.
+4. Diagnose the returned output and fix code through the host. Live xcode_issues/xcode_build_log are optional separate IDE evidence; verify that their project matches.
+5. Read launch interrupts. If blocked, ui_dismiss_interrupt with an explicit authorized action; never silently auto-accept permissions.
+6. Verify actual behavior using ui_act with a selector and waitFor, ui_wait for known conditions, and screenshot for visual framing. A successful build is not runtime verification. Report evidence and release the device claim.`}},
 			},
 		}, nil
 	})
@@ -35,12 +35,13 @@ func (a *App) registerPrompts(srv *mcp.Server) {
 			Messages: []*mcp.PromptMessage{
 				{Role: "user", Content: &mcp.TextContent{Text: `Use XCAutokit simulator tools:
 
-1. status — confirm a booted simulator (device_boot / open_sim if needed).
+1. status/device_list — choose an explicit simulator UUID (device_boot / open_sim if needed). Use device_claim for a host-owned driver across calls and pass leaseToken to mutations.
 2. After app_launch or navigation: ui_check_interrupt. If hasInterrupt, call ui_dismiss_interrupt with an explicit action (accept|decline|dismiss|button). Never invent Allow taps; never auto-accept ATT/location/camera without choosing intentionally. SpringBoard → button home + app_launch.
 3. ui_summary for a compact tree (includes interrupts preview), or ui_describe for full detail.
 4. ui_find with by+query (accessibilityId/label/text/role) to locate controls.
-5. gesture or tap/swipe/type_text to interact — prefer element selectors over raw coordinates when possible.
-6. screenshot after meaningful steps; re-check interrupts if a tap seems to do nothing.`}},
+5. Prefer ui_act with a unique selector and an explicit waitFor condition. Use ui_wait instead of fixed sleeps. Use gesture/swipe/type_text for other input. If performed is true but verification fails, inspect current state before retrying.
+6. Use workflow_run for a bounded sequence of already-known actions and assertions; stop on failure. The host owns all interpretation and recovery decisions.
+7. screenshot after meaningful steps for visual review. Share timestamped evidence with host-owned reviewers, and release the device when done.`}},
 			},
 		}, nil
 	})
@@ -54,10 +55,10 @@ func (a *App) registerPrompts(srv *mcp.Server) {
 			Messages: []*mcp.PromptMessage{
 				{Role: "user", Content: &mcp.TextContent{Text: `Use XCAutokit:
 
-1. Ensure session defaults (project/scheme) and xcode_windows if bridge is up.
-2. test_sim for the full suite, or run_some_tests for specific identifiers when mcpbridge is available.
-3. Read failures from the tool output / xcode_issues.
-4. Edit code, re-run the failing tests until green.`}},
+1. Confirm the explicit project, scheme, and simulator UUID. test_sim uses xcodebuild on that target and coordinates with its device lease.
+2. Run test_sim and inspect the actual failure output. With the optional live IDE bridge, run_some_tests follows the IDE's own project and destination; verify both and do not run it alongside another simulator driver.
+3. Edit code through the host and rerun the relevant tests. Do not treat missing output, a timeout, or an unavailable backend as success.
+4. For UI behavior, verify the fixed flow in the simulator and inspect screenshots. The host may delegate independent source/log/evidence analysis; XCAutokit never starts agents.`}},
 			},
 		}, nil
 	})

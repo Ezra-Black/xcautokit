@@ -1,6 +1,6 @@
 {
   "name": "xcautokit",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "description": "XCAutokit — first-party MCP server and CLI for Xcode + iOS Simulator automation",
   "keywords": [
     "mcp",
@@ -11,7 +11,7 @@
     "xcautokit"
   ],
   "license": "MIT",
-  "author": "XCAutokit",
+  "author": "Ezra Black",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Ezra-Black/xcautokit.git"
@@ -32,20 +32,33 @@
   },
   "files": [
     "npm/",
-    "dist/",
+    "dist/xcautokit-darwin-arm64",
+    "dist/xcautokit-darwin-amd64",
     "internal/",
+    "skills/embed.go",
+    "skills/xcautokit/",
+    "scripts/mcp_smoke_test.py",
+    "scripts/mcp_live_test.py",
+    "scripts/mcp_benchmark.py",
+    "testdata/SimulatorFixture/",
     "main.go",
     "go.mod",
     "go.sum",
     "AGENTS.md",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "scripts": {
     "build:go": "node npm/scripts/build-go.js",
     "postinstall": "node npm/scripts/postinstall.js",
-    "prepack": "node npm/scripts/build-go.js",
-    "test:mcp": "python3 scripts/mcp_smoke_test.py"
+    "prepack": "node npm/scripts/build-go.js --release",
+    "test": "go test ./...",
+    "test:race": "go test -race ./...",
+    "vet": "go vet ./...",
+    "test:mcp": "python3 scripts/mcp_smoke_test.py",
+    "test:live": "python3 scripts/mcp_live_test.py",
+    "benchmark:mcp": "python3 scripts/mcp_benchmark.py"
   },
   "preferGlobal": true
 }

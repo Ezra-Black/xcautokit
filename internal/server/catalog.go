@@ -6,8 +6,16 @@ type ToolInfo struct {
 	Description string
 }
 
-func ToolCatalog() []ToolInfo {
-	all := []ToolInfo{
+func allToolCatalog() []ToolInfo {
+	return []ToolInfo{
+		{Name: "device_claim", Category: "coordination", Description: "Reserve a simulator for one host agent"},
+		{Name: "device_release", Category: "coordination", Description: "Release a simulator reservation"},
+		{Name: "device_lease_status", Category: "coordination", Description: "Inspect simulator ownership"},
+		{Name: "ui_wait", Category: "ui", Description: "Wait for a UI condition with a bounded deadline"},
+		{Name: "ui_act", Category: "ui", Description: "Act on an unambiguous control and observe the result"},
+		{Name: "workflow_run", Category: "workflow", Description: "Execute explicit steps and return an evidence trace"},
+		{Name: "workflow_save", Category: "workflow", Description: "Save a verified run as a reusable workflow"},
+		{Name: "workflow_list", Category: "workflow", Description: "List saved workflows"},
 		{Name: "status", Category: "device", Description: "Simulator status"},
 		{Name: "device_list", Category: "device", Description: "List simulators"},
 		{Name: "device_boot", Category: "device", Description: "Boot simulator"},
@@ -58,6 +66,10 @@ func ToolCatalog() []ToolInfo {
 		{Name: "swift_snippet", Category: "xcode", Description: "Execute Swift snippet"},
 		{Name: "run_some_tests", Category: "xcode", Description: "Run selected tests"},
 	}
+}
+
+func ToolCatalog() []ToolInfo {
+	all := allToolCatalog()
 	wf := workflowsFromEnv()
 	if wf["all"] {
 		return all
